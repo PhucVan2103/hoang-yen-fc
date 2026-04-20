@@ -3,7 +3,6 @@ import { initializeApp } from 'firebase/app';
 import { 
   getAuth, 
   signInAnonymously, 
-  signInWithCustomToken, 
   onAuthStateChanged, 
   signOut 
 } from 'firebase/auth';
@@ -40,13 +39,14 @@ import {
 
 // --- Firebase Configuration ---
 const firebaseConfig = { 
-  apiKey : "AIzaSyCv2Y2oIAMUlsYj1Q-0hCJDGDLopGamskM",
-  authDomain : "hoang-yen-fc.firebaseapp.com",
-  projectId : "hoang-yen-fc",
-  storageBucket : "hoang-yen-fc.firebasestorage.app",
-  messagingSenderId : "754597692010",
-  appId : "1:754597692010:web:4b3a26965423e9ed0bc013"
+  apiKey: "AIzaSyCv2Y2oIAMUlsYj1Q-0hCJDGDLopGamskM", 
+  authDomain: "hoang-yen-fc.firebaseapp.com", 
+  projectId: "hoang-yen-fc", 
+  storageBucket: "hoang-yen-fc.firebasestorage.app", 
+  messagingSenderId: "754597692010", 
+  appId: "1:754597692010:web:4b3a26965423e9ed0bc013" 
 };
+
 const app = initializeApp(firebaseConfig);
 const auth = getAuth(app);
 const db = getFirestore(app);
@@ -93,7 +93,7 @@ export default function App() {
   
   // Điều hướng: 'home' = Danh sách giải, 'fund' = Chi tiết quỹ
   const [currentScreen, setCurrentScreen] = useState('home');
-  const [activeTab, setActiveTab] = useState('transactions'); // tabs bên trong màn fund
+  const [activeTab, setActiveTab] = useState('transactions'); 
   
   const [transactions, setTransactions] = useState([]);
   const [donations, setDonations] = useState([]);
@@ -103,9 +103,9 @@ export default function App() {
   const [activeTournamentId, setActiveTournamentId] = useState(null);
   
   // States Modals
-  const [showAddModal, setShowAddModal] = useState(false); // Modal thu/chi
-  const [showTournamentModal, setShowTournamentModal] = useState(false); // Modal thêm/sửa giải
-  const [editingTournament, setEditingTournament] = useState(null); // null = tạo mới, object = đang sửa
+  const [showAddModal, setShowAddModal] = useState(false); 
+  const [showTournamentModal, setShowTournamentModal] = useState(false); 
+  const [editingTournament, setEditingTournament] = useState(null); 
   
   const [newTournamentName, setNewTournamentName] = useState('');
   const [newTournamentImage, setNewTournamentImage] = useState('');
@@ -124,11 +124,12 @@ export default function App() {
   const defaultTournamentImg = "https://images.unsplash.com/photo-1522778119026-d647f0596c20?q=80&w=600&auto=format&fit=crop";
 
   useEffect(() => {
+    // Tự động đăng nhập ẩn danh khi vào app
     const initAuth = async () => {
-      if (typeof __initial_auth_token !== 'undefined' && __initial_auth_token) {
-        await signInWithCustomToken(auth, __initial_auth_token);
-      } else {
+      try {
         await signInAnonymously(auth);
+      } catch (error) {
+        console.error("Lỗi đăng nhập ẩn danh:", error);
       }
     };
     initAuth();
@@ -138,17 +139,18 @@ export default function App() {
   useEffect(() => {
     if (!user) return;
 
-    const unsubTrans = onSnapshot(collection(db, 'artifacts', appId, 'public', 'data', 'transactions'), (snapshot) => {
+    // Lấy dữ liệu từ Firestore (Đã cập nhật collection chuẩn)
+    const unsubTrans = onSnapshot(collection(db, 'transactions'), (snapshot) => {
       const data = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
       setTransactions(data.sort((a, b) => new Date(b.date) - new Date(a.date)));
     }, (err) => console.error(err));
 
-    const unsubDonations = onSnapshot(collection(db, 'artifacts', appId, 'public', 'data', 'donations'), (snapshot) => {
+    const unsubDonations = onSnapshot(collection(db, 'donations'), (snapshot) => {
       const data = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
       setDonations(data.sort((a, b) => new Date(b.date) - new Date(a.date)));
     }, (err) => console.error(err));
 
-    const unsubTournaments = onSnapshot(collection(db, 'artifacts', appId, 'public', 'data', 'tournaments'), (snapshot) => {
+    const unsubTournaments = onSnapshot(collection(db, 'tournaments'), (snapshot) => {
       const data = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
       setTournaments(data.sort((a, b) => new Date(a.createdAt || 0) - new Date(b.createdAt || 0)));
     }, (err) => console.error(err));
@@ -188,7 +190,7 @@ export default function App() {
 
   const toggleAdminSim = async () => {
     if (user?.isAnonymous) {
-      alert("Tính năng đăng nhập quyền Quản trị viên (Admin).\nTrong thực tế sẽ yêu cầu mật khẩu bảo mật.");
+      alert("Tính năng đăng nhập quyền Quản trị viên (Admin).\nĐể triển khai thực tế, bạn cần làm form Đăng nhập Email/Password của Firebase tại bước này.");
     } else {
       await signOut(auth);
       await signInAnonymously(auth);
@@ -247,7 +249,7 @@ export default function App() {
     
     for (let i = 0; i < items.length; i++) {
       if (items[i].type.indexOf('image') !== -1) {
-        e.preventDefault(); // Ngăn việc dán tên file dạng text vào input
+        e.preventDefault(); 
         const file = items[i].getAsFile();
         const compressedBase64 = await processImageFile(file);
         setNewTournamentImage(compressedBase64);
@@ -262,7 +264,6 @@ export default function App() {
     const compressedBase64 = await processImageFile(file);
     setNewTournamentImage(compressedBase64);
   };
-
 
   // --- Handlers: Thêm/Sửa Thu Chi ---
   const handleAddData = async (e) => {
@@ -283,7 +284,7 @@ export default function App() {
         date: formData.date,
         tournamentId: activeTournamentId
       };
-      await addDoc(collection(db, 'artifacts', appId, 'public', 'data', collectionName), dataToSave);
+      await addDoc(collection(db, collectionName), dataToSave);
       setShowAddModal(false);
       setFormData({ type: 'income', amount: '', note: '', date: new Date().toISOString().split('T')[0], donorName: '' });
     } catch (err) { console.error(err); }
@@ -293,7 +294,7 @@ export default function App() {
     if (!isAdmin || !window.confirm("Bạn có chắc chắn muốn xóa mục này?")) return;
     try {
       const collectionName = type === 'transaction' ? 'transactions' : 'donations';
-      await deleteDoc(doc(db, 'artifacts', appId, 'public', 'data', collectionName, id));
+      await deleteDoc(doc(db, collectionName, id));
     } catch (err) { console.error(err); }
   };
 
@@ -317,13 +318,13 @@ export default function App() {
     try {
       if (editingTournament) {
         // Cập nhật
-        await updateDoc(doc(db, 'artifacts', appId, 'public', 'data', 'tournaments', editingTournament.id), {
+        await updateDoc(doc(db, 'tournaments', editingTournament.id), {
           name: newTournamentName.trim(),
           imageUrl: newTournamentImage.trim()
         });
       } else {
         // Tạo mới
-        await addDoc(collection(db, 'artifacts', appId, 'public', 'data', 'tournaments'), {
+        await addDoc(collection(db, 'tournaments'), {
           name: newTournamentName.trim(),
           imageUrl: newTournamentImage.trim(),
           createdAt: new Date().toISOString()
@@ -337,7 +338,7 @@ export default function App() {
     if (!editingTournament || !isAdmin) return;
     if (!window.confirm("Bạn có chắc chắn muốn xóa giải đấu này? Mọi giao dịch thuộc giải này sẽ không còn xuất hiện trong nhóm này nữa.")) return;
     try {
-      await deleteDoc(doc(db, 'artifacts', appId, 'public', 'data', 'tournaments', editingTournament.id));
+      await deleteDoc(doc(db, 'tournaments', editingTournament.id));
       setShowTournamentModal(false);
     } catch (err) { console.error(err); }
   };
