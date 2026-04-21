@@ -93,8 +93,9 @@ export default function App() {
   const [isAdmin, setIsAdmin] = useState(false);
   const [isAdminView, setIsAdminView] = useState(true); 
   
-  const [currentScreen, setCurrentScreen] = useState('home'); // 'home' | 'detail'
-  const [activeMainTab, setActiveMainTab] = useState('info'); // 'info' | 'fund' | 'gallery'
+  const [currentScreen, setCurrentScreen] = useState('home'); 
+  const [activeMainTab, setActiveMainTab] = useState('info'); 
+  const [activeFundTab, setActiveFundTab] = useState('transactions'); // Tab con cho phần Thu Chi
   
   const [transactions, setTransactions] = useState([]);
   const [donations, setDonations] = useState([]);
@@ -124,9 +125,10 @@ export default function App() {
     date: new Date().toISOString().split('T')[0],
     donorName: '',
     imageUrl: '',
-    opponent: '',
+    homeTeam: '',
+    awayTeam: '',
     matchTime: '18:00',
-    location: '',
+    location: 'Nhà Thờ Thanh An',
     homeScore: '',
     awayScore: '',
     isCompleted: false
@@ -180,12 +182,6 @@ export default function App() {
   const currentPhotos = useMemo(() => photos.filter(p => p.tournamentId === activeTournamentId), [photos, activeTournamentId]);
   const currentMatches = useMemo(() => matches.filter(m => m.tournamentId === activeTournamentId), [matches, activeTournamentId]);
 
-  const combinedFundList = useMemo(() => {
-    const trans = currentTransactions.map(t => ({ ...t, _isDonation: false }));
-    const dons = currentDonations.map(d => ({ ...d, _isDonation: true }));
-    return [...trans, ...dons].sort(sortNewestFirst);
-  }, [currentTransactions, currentDonations]);
-
   const stats = useMemo(() => {
     const income = currentTransactions.filter(t => t.type === 'income').reduce((sum, t) => sum + Number(t.amount), 0);
     const expense = currentTransactions.filter(t => t.type === 'expense').reduce((sum, t) => sum + Number(t.amount), 0);
@@ -212,7 +208,7 @@ export default function App() {
     else alert("Mật khẩu không chính xác!");
   };
 
-  const goToDetail = (id) => { setActiveTournamentId(id); setCurrentScreen('detail'); setActiveMainTab('info'); };
+  const goToDetail = (id) => { setActiveTournamentId(id); setCurrentScreen('detail'); setActiveMainTab('info'); setActiveFundTab('transactions'); };
   const goHome = () => setCurrentScreen('home');
 
   const processImageFile = (file) => {
@@ -260,7 +256,7 @@ export default function App() {
   const resetFormData = () => {
     setFormData({
       type: 'income', amount: '', note: '', date: new Date().toISOString().split('T')[0], donorName: '', imageUrl: '',
-      opponent: '', matchTime: '18:00', location: '', homeScore: '', awayScore: '', isCompleted: false
+      homeTeam: '', awayTeam: '', matchTime: '18:00', location: 'Nhà Thờ Thanh An', homeScore: '', awayScore: '', isCompleted: false
     });
   };
 
@@ -274,9 +270,10 @@ export default function App() {
       date: item.date || new Date().toISOString().split('T')[0],
       donorName: item.donorName || '',
       imageUrl: item.imageUrl || '',
-      opponent: item.opponent || '',
+      homeTeam: item.homeTeam || item.opponent || '', // Support backward compatibility
+      awayTeam: item.awayTeam || '',
       matchTime: item.time || '18:00',
-      location: item.location || '',
+      location: item.location || 'Nhà Thờ Thanh An',
       homeScore: item.homeScore !== null ? item.homeScore : '',
       awayScore: item.awayScore !== null ? item.awayScore : '',
       isCompleted: item.isCompleted || false
@@ -307,7 +304,7 @@ export default function App() {
       } else if (modalType === 'match') {
         collectionName = 'matches';
         dataToSave = { 
-          opponent: formData.opponent, date: formData.date, time: formData.matchTime, location: formData.location, 
+          homeTeam: formData.homeTeam, awayTeam: formData.awayTeam, date: formData.date, time: formData.matchTime, location: formData.location, 
           homeScore: formData.isCompleted ? Number(formData.homeScore) : null, 
           awayScore: formData.isCompleted ? Number(formData.awayScore) : null,
           isCompleted: formData.isCompleted, tournamentId: activeTournamentId, updatedAt: timestamp 
@@ -438,7 +435,7 @@ export default function App() {
         {currentScreen === 'detail' && (
           <main className="flex-1 overflow-y-auto pb-[100px] bg-[#f4f6f8] [&::-webkit-scrollbar]:hidden [-ms-overflow-style:none] [scrollbar-width:none]">
             
-            {/* --- TAB: THÔNG TIN (Lịch đấu & Kết quả) --- */}
+            {/* --- TAB 1: THÔNG TIN (Lịch đấu & Kết quả) --- */}
             {activeMainTab === 'info' && (
               <div className="animate-in fade-in slide-in-from-bottom-4 duration-300 px-5 pt-5">
                 <h2 className="text-sm font-black text-slate-400 mb-4 px-1 uppercase tracking-wider">Lịch đấu & Kết quả</h2>
@@ -448,70 +445,71 @@ export default function App() {
                   </div>
                 ) : (
                   <div className="flex flex-col gap-4">
-                    {currentMatches.map(match => (
-                      <div key={match.id} className="bg-white rounded-3xl p-5 shadow-sm border border-slate-100 relative">
-                        {/* Status badge */}
-                        <div className="flex justify-between items-center mb-4">
-                          <div className={`px-2.5 py-1 rounded-lg text-[10px] font-black uppercase tracking-wider ${match.isCompleted ? 'bg-slate-100 text-slate-500' : 'bg-emerald-100 text-emerald-600 animate-pulse'}`}>
-                            {match.isCompleted ? 'Đã kết thúc' : 'Sắp diễn ra'}
-                          </div>
-                          <div className="flex items-center gap-1.5 text-xs font-bold text-slate-400">
-                            <CalendarDays size={14}/> {match.date} <span className="mx-1">•</span> <Clock size={14}/> {match.time}
-                          </div>
-                        </div>
-
-                        {/* Match Score Board */}
-                        <div className="flex items-center justify-between mt-2 mb-6">
-                          {/* Home */}
-                          <div className="flex flex-col items-center gap-2 flex-1">
-                            <div className="w-14 h-14 bg-slate-900 rounded-full flex items-center justify-center shadow-md">
-                              <ShieldCheck size={28} className="text-white" strokeWidth={2} />
+                    {currentMatches.map(match => {
+                      const hTeam = match.homeTeam || 'Hoàng Yên FC';
+                      const aTeam = match.awayTeam || match.opponent || 'Đội khách';
+                      return (
+                        <div key={match.id} className="bg-white rounded-3xl p-5 shadow-sm border border-slate-100 relative">
+                          <div className="flex justify-between items-center mb-4">
+                            <div className={`px-2.5 py-1 rounded-lg text-[10px] font-black uppercase tracking-wider ${match.isCompleted ? 'bg-slate-100 text-slate-500' : 'bg-emerald-100 text-emerald-600 animate-pulse'}`}>
+                              {match.isCompleted ? 'Đã kết thúc' : 'Sắp diễn ra'}
                             </div>
-                            <span className="font-black text-sm text-center line-clamp-1">Hoàng Yên FC</span>
+                            <div className="flex items-center gap-1.5 text-xs font-bold text-slate-400">
+                              <CalendarDays size={14}/> {match.date} <span className="mx-1">•</span> <Clock size={14}/> {match.time}
+                            </div>
                           </div>
 
-                          {/* Score / VS */}
-                          <div className="flex-1 flex justify-center">
-                            {match.isCompleted ? (
-                              <div className={`px-4 py-2 rounded-2xl border-2 flex items-center gap-3 ${getMatchResultColor(match.homeScore, match.awayScore)}`}>
-                                <span className="text-2xl font-black">{match.homeScore}</span>
-                                <span className="text-lg text-slate-300">-</span>
-                                <span className="text-2xl font-black">{match.awayScore}</span>
+                          <div className="flex items-center justify-between mt-2 mb-6">
+                            {/* Home Team */}
+                            <div className="flex flex-col items-center gap-2 flex-1">
+                              <div className="w-14 h-14 bg-slate-900 rounded-full flex items-center justify-center shadow-md text-white font-black text-xl">
+                                {hTeam.charAt(0).toUpperCase()}
                               </div>
-                            ) : (
-                              <div className="bg-slate-50 text-slate-400 px-4 py-2 rounded-2xl border-2 border-slate-100 font-black text-xl italic">VS</div>
+                              <span className="font-black text-sm text-center line-clamp-2 px-1 leading-tight">{hTeam}</span>
+                            </div>
+
+                            {/* Score / VS */}
+                            <div className="flex-1 flex justify-center shrink-0">
+                              {match.isCompleted ? (
+                                <div className={`px-4 py-2 rounded-2xl border-2 flex items-center gap-3 ${getMatchResultColor(match.homeScore, match.awayScore)}`}>
+                                  <span className="text-2xl font-black">{match.homeScore}</span>
+                                  <span className="text-lg text-slate-300">-</span>
+                                  <span className="text-2xl font-black">{match.awayScore}</span>
+                                </div>
+                              ) : (
+                                <div className="bg-slate-50 text-slate-400 px-4 py-2 rounded-2xl border-2 border-slate-100 font-black text-xl italic">VS</div>
+                              )}
+                            </div>
+
+                            {/* Away Team */}
+                            <div className="flex flex-col items-center gap-2 flex-1">
+                              <div className="w-14 h-14 bg-slate-100 border-2 border-slate-200 rounded-full flex items-center justify-center shadow-sm text-slate-400 font-black text-xl">
+                                {aTeam.charAt(0).toUpperCase()}
+                              </div>
+                              <span className="font-black text-sm text-center line-clamp-2 px-1 leading-tight">{aTeam}</span>
+                            </div>
+                          </div>
+
+                          <div className="flex items-center justify-between pt-4 border-t border-slate-50">
+                            <div className="flex items-center gap-1.5 text-xs font-semibold text-slate-500 truncate pr-4">
+                              <MapPin size={14} className="text-rose-500 shrink-0"/> <span className="truncate">{match.location || 'Nhà Thờ Thanh An'}</span>
+                            </div>
+                            {isAdmin && isAdminView && (
+                              <div className="flex gap-2 shrink-0">
+                                <button onClick={() => openEditDataModal(match, 'match', 'match')} className="p-1.5 text-slate-300 hover:text-emerald-500 bg-slate-50 rounded-lg"><Edit2 size={16} /></button>
+                                <button onClick={() => handleDeleteData(match.id, 'match')} className="p-1.5 text-slate-300 hover:text-rose-500 bg-slate-50 rounded-lg"><Trash2 size={16} /></button>
+                              </div>
                             )}
                           </div>
-
-                          {/* Away */}
-                          <div className="flex flex-col items-center gap-2 flex-1">
-                            <div className="w-14 h-14 bg-slate-100 border-2 border-slate-200 rounded-full flex items-center justify-center shadow-sm">
-                              <ShieldAlert size={28} className="text-slate-300" strokeWidth={2} />
-                            </div>
-                            <span className="font-black text-sm text-center line-clamp-1">{match.opponent}</span>
-                          </div>
                         </div>
-
-                        {/* Footer card */}
-                        <div className="flex items-center justify-between pt-4 border-t border-slate-50">
-                          <div className="flex items-center gap-1.5 text-xs font-semibold text-slate-500 truncate pr-4">
-                            <MapPin size={14} className="text-rose-500 shrink-0"/> <span className="truncate">{match.location || 'Chưa cập nhật sân'}</span>
-                          </div>
-                          {isAdmin && isAdminView && (
-                            <div className="flex gap-2 shrink-0">
-                              <button onClick={() => openEditDataModal(match, 'match', 'match')} className="p-1.5 text-slate-300 hover:text-emerald-500 bg-slate-50 rounded-lg"><Edit2 size={16} /></button>
-                              <button onClick={() => handleDeleteData(match.id, 'match')} className="p-1.5 text-slate-300 hover:text-rose-500 bg-slate-50 rounded-lg"><Trash2 size={16} /></button>
-                            </div>
-                          )}
-                        </div>
-                      </div>
-                    ))}
+                      )
+                    })}
                   </div>
                 )}
               </div>
             )}
 
-            {/* --- TAB: THU CHI --- */}
+            {/* --- TAB 2: THU CHI --- */}
             {activeMainTab === 'fund' && (
               <div className="animate-in fade-in slide-in-from-bottom-4 duration-300 px-5 pt-5">
                 <div className="bg-slate-900 text-white p-6 rounded-3xl shadow-xl relative overflow-hidden mb-6">
@@ -527,29 +525,38 @@ export default function App() {
                   <div className="absolute -left-10 -bottom-10 w-40 h-40 bg-blue-500/20 rounded-full blur-3xl"></div>
                 </div>
 
-                <h2 className="text-sm font-black text-slate-400 mb-4 px-1 uppercase tracking-wider">Lịch sử giao dịch</h2>
+                {/* Sub-tabs for Fund */}
+                <div className="flex bg-slate-200/70 p-1.5 rounded-2xl mb-5">
+                  <button onClick={() => setActiveFundTab('transactions')} className={`flex-1 py-2.5 text-sm font-bold rounded-xl transition-all duration-200 ${activeFundTab === 'transactions' ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-500'}`}>Giao Dịch</button>
+                  <button onClick={() => setActiveFundTab('donations')} className={`flex-1 py-2.5 text-sm font-bold rounded-xl transition-all duration-200 ${activeFundTab === 'donations' ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-500'}`}>Ủng Hộ</button>
+                </div>
+
+                <h2 className="text-sm font-black text-slate-400 mb-4 px-1 uppercase tracking-wider">
+                  {activeFundTab === 'transactions' ? 'Lịch sử giao dịch' : 'Danh sách ủng hộ'}
+                </h2>
+                
                 <div className="space-y-3 pb-4">
-                  {combinedFundList.length === 0 ? (
+                  {(activeFundTab === 'transactions' ? currentTransactions : currentDonations).length === 0 ? (
                     <div className="text-center py-10 text-slate-400 bg-white rounded-3xl border border-slate-200"><p className="text-sm font-medium">Chưa có dữ liệu.</p></div>
                   ) : (
-                    combinedFundList.map(item => (
+                    (activeFundTab === 'transactions' ? currentTransactions : currentDonations).map(item => (
                       <div key={item.id} className="bg-white p-4 rounded-[1.5rem] flex items-center gap-4 shadow-sm border border-slate-100">
-                        <div className={`shrink-0 w-14 h-14 rounded-[1rem] flex items-center justify-center ${item._isDonation ? 'bg-amber-50 text-amber-600' : item.type === 'income' ? 'bg-emerald-50 text-emerald-600' : 'bg-rose-50 text-rose-600'}`}>
-                          {item._isDonation ? <Heart size={24} strokeWidth={2.5} /> : item.type === 'income' ? <ArrowUpRight size={24} strokeWidth={2.5} /> : <ArrowDownLeft size={24} strokeWidth={2.5} />}
+                        <div className={`shrink-0 w-14 h-14 rounded-[1rem] flex items-center justify-center ${activeFundTab === 'donations' ? 'bg-amber-50 text-amber-600' : item.type === 'income' ? 'bg-emerald-50 text-emerald-600' : 'bg-rose-50 text-rose-600'}`}>
+                          {activeFundTab === 'donations' ? <Heart size={24} strokeWidth={2.5} /> : item.type === 'income' ? <ArrowUpRight size={24} strokeWidth={2.5} /> : <ArrowDownLeft size={24} strokeWidth={2.5} />}
                         </div>
                         <div className="flex-1 min-w-0">
-                          <p className="font-bold text-[15px] truncate text-slate-900">{item._isDonation ? item.donorName : item.note}</p>
-                          {item._isDonation && item.note && <p className="text-[11px] text-slate-500 mt-0.5 truncate pr-2 font-medium">"{item.note}"</p>}
+                          <p className="font-bold text-[15px] truncate text-slate-900">{activeFundTab === 'donations' ? item.donorName : item.note}</p>
+                          {activeFundTab === 'donations' && item.note && <p className="text-[11px] text-slate-500 mt-0.5 truncate pr-2 font-medium">"{item.note}"</p>}
                           <p className="text-[11px] text-slate-400 font-bold mt-1 uppercase tracking-wider">{item.date}</p>
                         </div>
                         <div className="text-right flex flex-col items-end gap-1.5">
-                          <p className={`font-black text-[16px] tracking-tight ${item._isDonation ? 'text-amber-600' : item.type === 'income' ? 'text-emerald-600' : 'text-slate-900'}`}>
-                            {item._isDonation || item.type === 'income' ? '+' : '-'}{formatCurrency(item.amount)}
+                          <p className={`font-black text-[16px] tracking-tight ${activeFundTab === 'donations' ? 'text-amber-600' : item.type === 'income' ? 'text-emerald-600' : 'text-slate-900'}`}>
+                            {activeFundTab === 'donations' || item.type === 'income' ? '+' : '-'}{formatCurrency(item.amount)}
                           </p>
                           {isAdmin && isAdminView && (
                             <div className="flex items-center gap-2">
-                              <button onClick={() => openEditDataModal(item, 'fund', item._isDonation ? 'donation' : item.type)} className="text-slate-300 hover:text-emerald-500 p-1 bg-slate-50 rounded-md"><Edit2 size={12} /></button>
-                              <button onClick={() => handleDeleteData(item.id, item._isDonation ? 'donation' : 'transaction')} className="text-slate-300 hover:text-rose-500 p-1 bg-slate-50 rounded-md"><Trash2 size={12} /></button>
+                              <button onClick={() => openEditDataModal(item, 'fund', activeFundTab === 'donations' ? 'donation' : item.type)} className="text-slate-300 hover:text-emerald-500 p-1 bg-slate-50 rounded-md"><Edit2 size={12} /></button>
+                              <button onClick={() => handleDeleteData(item.id, activeFundTab === 'donations' ? 'donation' : 'transaction')} className="text-slate-300 hover:text-rose-500 p-1 bg-slate-50 rounded-md"><Trash2 size={12} /></button>
                             </div>
                           )}
                         </div>
@@ -560,7 +567,7 @@ export default function App() {
               </div>
             )}
 
-            {/* --- TAB: KỈ NIỆM --- */}
+            {/* --- TAB 3: KỈ NIỆM --- */}
             {activeMainTab === 'gallery' && (
               <div className="animate-in fade-in slide-in-from-bottom-4 duration-300 px-5 pt-5 pb-8">
                 <h2 className="text-sm font-black text-slate-400 mb-4 px-1 uppercase tracking-wider">Thư viện hình ảnh</h2>
@@ -597,7 +604,7 @@ export default function App() {
                 setModalType(activeMainTab === 'info' ? 'match' : activeMainTab);
                 if (activeMainTab === 'info') setFormData(prev => ({...prev, type: 'match'}));
                 else if (activeMainTab === 'gallery') setFormData(prev => ({...prev, type: 'gallery'}));
-                else setFormData(prev => ({...prev, type: 'income'}));
+                else setFormData(prev => ({...prev, type: activeFundTab === 'transactions' ? 'income' : 'donation'}));
                 setShowAddModal(true);
               }} className="fixed bottom-24 right-6 w-14 h-14 bg-emerald-500 text-white rounded-full shadow-[0_10px_25px_-5px_rgba(16,185,129,0.5)] flex items-center justify-center z-30 active:scale-95 transition-transform border-4 border-white">
                 <Plus size={28} strokeWidth={3} />
@@ -697,9 +704,15 @@ export default function App() {
                 {/* 3. Form TRẬN ĐẤU */}
                 {modalType === 'match' && (
                   <>
-                    <div className="space-y-1.5">
-                      <label className="text-xs font-bold text-slate-500 ml-1">Tên Đội Đối Thủ</label>
-                      <input type="text" required placeholder="VD: FC Bạn Bè..." className="w-full bg-slate-50 border border-slate-200 rounded-xl p-3.5 text-[15px] font-black focus:border-slate-900 focus:outline-none" value={formData.opponent} onChange={(e) => setFormData({...formData, opponent: e.target.value})} />
+                    <div className="grid grid-cols-2 gap-3">
+                      <div className="space-y-1.5">
+                        <label className="text-xs font-bold text-slate-500 ml-1">Đội 1 (Chủ nhà)</label>
+                        <input type="text" required placeholder="Tên đội..." className="w-full bg-slate-50 border border-slate-200 rounded-xl p-3.5 text-[15px] font-black focus:border-slate-900 focus:outline-none" value={formData.homeTeam} onChange={(e) => setFormData({...formData, homeTeam: e.target.value})} />
+                      </div>
+                      <div className="space-y-1.5">
+                        <label className="text-xs font-bold text-slate-500 ml-1">Đội 2 (Khách)</label>
+                        <input type="text" required placeholder="Tên đội..." className="w-full bg-slate-50 border border-slate-200 rounded-xl p-3.5 text-[15px] font-black focus:border-slate-900 focus:outline-none" value={formData.awayTeam} onChange={(e) => setFormData({...formData, awayTeam: e.target.value})} />
+                      </div>
                     </div>
                     <div className="grid grid-cols-2 gap-3">
                       <div className="space-y-1.5">
@@ -713,7 +726,7 @@ export default function App() {
                     </div>
                     <div className="space-y-1.5">
                       <label className="text-xs font-bold text-slate-500 ml-1">Sân thi đấu</label>
-                      <input type="text" placeholder="Tên sân..." className="w-full bg-slate-50 border border-slate-200 rounded-xl p-3.5 text-[15px] font-bold focus:border-slate-900 focus:outline-none" value={formData.location} onChange={(e) => setFormData({...formData, location: e.target.value})} />
+                      <input type="text" required placeholder="Tên sân..." className="w-full bg-slate-50 border border-slate-200 rounded-xl p-3.5 text-[15px] font-bold focus:border-slate-900 focus:outline-none" value={formData.location} onChange={(e) => setFormData({...formData, location: e.target.value})} />
                     </div>
 
                     <div className="mt-4 pt-4 border-t border-slate-100">
@@ -725,12 +738,12 @@ export default function App() {
                       {formData.isCompleted && (
                         <div className="flex items-center gap-4 bg-slate-50 p-4 rounded-2xl border border-slate-200">
                           <div className="flex-1 text-center">
-                            <label className="text-[10px] font-black text-slate-400 block mb-1">HOÀNG YÊN FC</label>
+                            <label className="text-[10px] font-black text-slate-400 block mb-1 uppercase truncate">{formData.homeTeam || 'ĐỘI 1'}</label>
                             <input type="number" required={formData.isCompleted} placeholder="0" className="w-full bg-white border border-slate-200 rounded-xl p-3 text-2xl text-center font-black focus:border-slate-900 focus:outline-none" value={formData.homeScore} onChange={(e) => setFormData({...formData, homeScore: e.target.value})} />
                           </div>
                           <div className="font-black text-slate-300 text-2xl pt-4">-</div>
                           <div className="flex-1 text-center">
-                            <label className="text-[10px] font-black text-slate-400 block mb-1">ĐỐI THỦ</label>
+                            <label className="text-[10px] font-black text-slate-400 block mb-1 uppercase truncate">{formData.awayTeam || 'ĐỘI 2'}</label>
                             <input type="number" required={formData.isCompleted} placeholder="0" className="w-full bg-white border border-slate-200 rounded-xl p-3 text-2xl text-center font-black focus:border-slate-900 focus:outline-none" value={formData.awayScore} onChange={(e) => setFormData({...formData, awayScore: e.target.value})} />
                           </div>
                         </div>
