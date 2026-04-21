@@ -42,7 +42,7 @@ import {
   Swords
 } from 'lucide-react';
 
-// --- Firebase Configuration ---
+// --- Firebase Configuration (Cấu hình thật của Hoàng Yên FC) ---
 const firebaseConfig = { 
   apiKey: "AIzaSyCv2Y2oIAMUlsYj1Q-0hCJDGDLopGamskM", 
   authDomain: "hoang-yen-fc.firebaseapp.com", 
@@ -91,12 +91,12 @@ const IPhone14Frame = ({ children }) => {
 export default function App() {
   const [user, setUser] = useState(null);
   const [isAdmin, setIsAdmin] = useState(false);
-  const [isAdminView, setIsAdminView] = useState(true); 
+  const [isAdminView, setIsAdminView] = useState(true);
   
   const [currentScreen, setCurrentScreen] = useState('home'); 
   const [activeMainTab, setActiveMainTab] = useState('info'); 
   const [activeFundTab, setActiveFundTab] = useState('transactions');
-  const [activeInfoTab, setActiveInfoTab] = useState('matches'); // 'matches' hoặc 'standings'
+  const [activeInfoTab, setActiveInfoTab] = useState('matches'); 
   
   const [transactions, setTransactions] = useState([]);
   const [donations, setDonations] = useState([]);
@@ -160,14 +160,21 @@ export default function App() {
     return timeB - timeA;
   };
 
+  // Sắp xếp các trận đấu từ Cũ đến Mới (để hiển thị đúng tiến trình giải đấu)
   const sortMatches = (a, b) => {
     const dateA = new Date(`${a.date}T${a.time || '00:00'}`);
     const dateB = new Date(`${b.date}T${b.time || '00:00'}`);
-    return dateB - dateA; 
+    return dateA - dateB; 
   };
 
   useEffect(() => {
-    const initAuth = async () => { try { await signInAnonymously(auth); } catch (err) { console.error(err); } };
+    const initAuth = async () => {
+      try {
+        await signInAnonymously(auth);
+      } catch (err) {
+        console.error("Lỗi đăng nhập:", err);
+      }
+    };
     initAuth();
     return onAuthStateChanged(auth, setUser);
   }, []);
@@ -189,13 +196,12 @@ export default function App() {
   const currentMatches = useMemo(() => matches.filter(m => m.tournamentId === activeTournamentId), [matches, activeTournamentId]);
   const currentTeams = useMemo(() => teams.filter(t => t.tournamentId === activeTournamentId), [teams, activeTournamentId]);
 
-  // Logic Tạo Bảng Xếp Hạng Chuẩn
+  // Tự động tính toán bảng xếp hạng
   const standings = useMemo(() => {
     const table = {}; 
     const teamOverrides = {}; 
     const teamIdMap = {};
 
-    // Lấy bảng cố định của các đội đã được User lưu trong DB
     currentTeams.forEach(t => {
       teamOverrides[t.name] = t.group || 'Bảng Chung';
       teamIdMap[t.name] = t.id;
@@ -213,17 +219,14 @@ export default function App() {
       }
     };
 
-    // 1. Khởi tạo tất cả các đội đã biết vào Bảng của họ
     currentTeams.forEach(t => {
       initTeam(teamOverrides[t.name], t.name);
     });
 
-    // 2. Chạy qua các Trận đấu để tính điểm và tạo thêm đội nếu có đội mới
     currentMatches.forEach(m => {
       const hTeam = m.homeTeam || 'Đội 1';
       const aTeam = m.awayTeam || m.opponent || 'Đội 2';
       
-      // Nếu đội đã được gán bảng trong teamOverrides thì ưu tiên dùng, nếu không thì lấy bảng từ trận đấu
       const hGroup = teamOverrides[hTeam] || m.group || 'Bảng Chung';
       const aGroup = teamOverrides[aTeam] || m.group || 'Bảng Chung';
 
@@ -234,14 +237,12 @@ export default function App() {
         const hs = Number(m.homeScore);
         const as = Number(m.awayScore);
 
-        // Cộng điểm Đội nhà
         const ht = table[hGroup][hTeam];
         ht.p += 1; ht.gf += hs; ht.ga += as; ht.gd += (hs - as);
         if (hs > as) { ht.w += 1; ht.pts += 3; }
         else if (hs === as) { ht.d += 1; ht.pts += 1; }
         else { ht.l += 1; }
 
-        // Cộng điểm Đội khách
         const at = table[aGroup][aTeam];
         at.p += 1; at.gf += as; at.ga += hs; at.gd += (as - hs);
         if (as > hs) { at.w += 1; at.pts += 3; }
@@ -250,14 +251,13 @@ export default function App() {
       }
     });
 
-    // 3. Sắp xếp lại danh sách
     const sortedStandings = [];
     Object.keys(table).sort().forEach(group => {
       const teamsList = Object.values(table[group]).sort((a, b) => {
-        if (b.pts !== a.pts) return b.pts - a.pts; // Ưu tiên điểm
-        if (b.gd !== a.gd) return b.gd - a.gd;     // Ưu tiên hiệu số
-        if (b.gf !== a.gf) return b.gf - a.gf;     // Ưu tiên bàn thắng
-        return a.name.localeCompare(b.name);       // Theo bảng chữ cái
+        if (b.pts !== a.pts) return b.pts - a.pts; 
+        if (b.gd !== a.gd) return b.gd - a.gd;     
+        if (b.gf !== a.gf) return b.gf - a.gf;     
+        return a.name.localeCompare(b.name);       
       });
       sortedStandings.push({ group, teams: teamsList });
     });
@@ -438,7 +438,7 @@ export default function App() {
 
   const handleSaveTournament = async (e) => {
     e.preventDefault();
-    if (!isAdmin || !isAdminView || !newTournamentName.trim()) return;
+    if (!isAdmin || !newTournamentName.trim()) return;
     try {
       const timestamp = new Date().toISOString();
       if (editingTournament) {
@@ -451,7 +451,7 @@ export default function App() {
   };
 
   const handleDeleteTournament = async () => {
-    if (!editingTournament || !isAdmin || !isAdminView) return;
+    if (!editingTournament || !isAdmin) return;
     openConfirm("Xóa giải đấu", `Bạn muốn xóa "${editingTournament.name}"?`, async () => {
       try { await deleteDoc(doc(db, 'tournaments', editingTournament.id)); setShowTournamentModal(false); closeConfirm(); } 
       catch (err) { console.error(err); }
@@ -487,7 +487,10 @@ export default function App() {
               <div><h1 className="text-[17px] font-black tracking-tight leading-tight truncate max-w-[150px] uppercase">{activeTournamentName}</h1><p className="text-[10px] font-bold text-slate-400 tracking-wider mt-0.5">CHI TIẾT GIẢI ĐẤU</p></div>
             </div>
           )}
-          <button onClick={handleShieldClick} className={`w-10 h-10 rounded-full flex items-center justify-center transition-all shadow-sm ${isAdmin ? (isAdminView ? 'bg-amber-100 text-amber-600' : 'bg-emerald-100 text-emerald-600') : 'bg-slate-100 text-slate-400 hover:bg-slate-200'}`}>
+          <button 
+            onClick={handleShieldClick}
+            className={`w-10 h-10 rounded-full flex items-center justify-center transition-all shadow-sm ${isAdmin ? (isAdminView ? 'bg-amber-100 text-amber-600' : 'bg-emerald-100 text-emerald-600') : 'bg-slate-100 text-slate-400 hover:bg-slate-200'}`}
+          >
             {isAdmin ? <ShieldCheck size={20} /> : <Lock size={18} />}
           </button>
         </header>
@@ -501,14 +504,14 @@ export default function App() {
                 {tournaments.length === 0 ? (
                   <div className="text-center py-10 text-slate-400 bg-white rounded-[1.75rem] border border-slate-200 border-dashed">
                     <p className="text-sm font-medium">Chưa có giải đấu nào.</p>
-                    {isAdmin && isAdminView && <p className="text-xs mt-1">Bấm dấu + ở góc dưới để thêm mới.</p>}
+                    {isAdmin && <p className="text-xs mt-1">Bấm dấu + ở góc dưới để thêm mới.</p>}
                   </div>
                 ) : (
                   tournaments.map(t => (
                     <div key={t.id} onClick={() => goToDetail(t.id)} className="relative h-[330px] rounded-[2rem] overflow-hidden shadow-lg cursor-pointer group active:scale-[0.98] transition-transform bg-slate-200 border border-black/5">
                       <img src={t.imageUrl || defaultTournamentImg} alt={t.name} className="w-full h-full object-cover" />
                       <div className="absolute inset-0 bg-gradient-to-t from-slate-900 via-slate-900/40 to-black/5"></div>
-                      {isAdmin && isAdminView && (
+                      {isAdmin && (
                         <button onClick={(e) => { e.stopPropagation(); openTournamentModal(t); }} className="absolute top-4 right-4 bg-white/20 backdrop-blur-md p-2.5 rounded-2xl text-white hover:bg-white/30 transition-colors z-20">
                           <Edit2 size={18} strokeWidth={2.5} />
                         </button>
@@ -524,7 +527,7 @@ export default function App() {
               </div>
             </div>
             {/* Nút FAB Home */}
-            {isAdmin && isAdminView && (
+            {isAdmin && (
               <button onClick={() => { setEditingData(null); openTournamentModal(); }} className="fixed bottom-10 right-6 w-14 h-14 bg-slate-900 text-white rounded-full shadow-2xl flex items-center justify-center z-30 active:scale-95 transition-transform border-4 border-white">
                 <Plus size={28} strokeWidth={3} />
               </button>
@@ -560,6 +563,9 @@ export default function App() {
                       {currentMatches.map(match => {
                         const hTeam = match.homeTeam || 'Đội 1';
                         const aTeam = match.awayTeam || match.opponent || 'Đội 2';
+                        const isHomeWinner = match.isCompleted && Number(match.homeScore) > Number(match.awayScore);
+                        const isAwayWinner = match.isCompleted && Number(match.awayScore) > Number(match.homeScore);
+
                         return (
                           <div key={match.id} className="bg-white rounded-[1.5rem] p-5 shadow-[0_4px_20px_-4px_rgba(0,0,0,0.05)] border border-slate-100 relative">
                             <div className="flex justify-between items-start mb-4 border-b border-slate-50 pb-3">
@@ -576,19 +582,19 @@ export default function App() {
                               </div>
                             </div>
 
-                            <div className="flex items-center justify-between mt-3 mb-5">
+                            <div className="flex items-center justify-between mt-3 mb-5 gap-2">
                               {/* Đội Nhà */}
-                              <div className="flex flex-col items-center gap-2.5 flex-1 w-0">
-                                <div className="w-14 h-14 bg-slate-900 rounded-[1.2rem] flex items-center justify-center shadow-lg text-white font-black text-xl shrink-0">
+                              <div className={`flex flex-col items-center gap-2.5 flex-1 w-0 py-2 rounded-2xl transition-all ${isHomeWinner ? 'bg-emerald-50 border border-emerald-100/50 shadow-sm scale-105' : ''}`}>
+                                <div className={`w-14 h-14 rounded-[1.2rem] flex items-center justify-center shadow-md font-black text-xl shrink-0 ${isHomeWinner ? 'bg-emerald-500 text-white ring-4 ring-emerald-100' : 'bg-slate-900 text-white'}`}>
                                   {hTeam.charAt(0).toUpperCase()}
                                 </div>
-                                <span className="font-bold text-[13px] text-center line-clamp-2 px-1 leading-snug text-slate-800">{hTeam}</span>
+                                <span className={`font-bold text-[13px] text-center line-clamp-2 px-1 leading-snug ${isHomeWinner ? 'text-emerald-700' : 'text-slate-800'}`}>{hTeam}</span>
                               </div>
 
                               {/* Tỉ số / VS */}
-                              <div className="flex-1 flex justify-center shrink-0 px-2">
+                              <div className="flex-1 flex justify-center shrink-0 px-1">
                                 {match.isCompleted ? (
-                                  <div className={`px-5 py-2.5 rounded-2xl border-[2.5px] flex items-center gap-3 ${getMatchResultColor(match.homeScore, match.awayScore)}`}>
+                                  <div className={`px-4 py-2.5 rounded-2xl border-[2.5px] flex items-center gap-3 ${getMatchResultColor(match.homeScore, match.awayScore)}`}>
                                     <span className="text-3xl font-black">{match.homeScore}</span>
                                     <span className="text-lg opacity-40 font-black">-</span>
                                     <span className="text-3xl font-black">{match.awayScore}</span>
@@ -601,11 +607,11 @@ export default function App() {
                               </div>
 
                               {/* Đội Khách */}
-                              <div className="flex flex-col items-center gap-2.5 flex-1 w-0">
-                                <div className="w-14 h-14 bg-slate-50 border-2 border-slate-200 rounded-[1.2rem] flex items-center justify-center shadow-sm text-slate-400 font-black text-xl shrink-0">
+                              <div className={`flex flex-col items-center gap-2.5 flex-1 w-0 py-2 rounded-2xl transition-all ${isAwayWinner ? 'bg-emerald-50 border border-emerald-100/50 shadow-sm scale-105' : ''}`}>
+                                <div className={`w-14 h-14 rounded-[1.2rem] flex items-center justify-center shadow-md font-black text-xl shrink-0 ${isAwayWinner ? 'bg-emerald-500 text-white ring-4 ring-emerald-100 border-none' : 'bg-slate-50 border-2 border-slate-200 text-slate-500'}`}>
                                   {aTeam.charAt(0).toUpperCase()}
                                 </div>
-                                <span className="font-bold text-[13px] text-center line-clamp-2 px-1 leading-snug text-slate-800">{aTeam}</span>
+                                <span className={`font-bold text-[13px] text-center line-clamp-2 px-1 leading-snug ${isAwayWinner ? 'text-emerald-700' : 'text-slate-800'}`}>{aTeam}</span>
                               </div>
                             </div>
 
