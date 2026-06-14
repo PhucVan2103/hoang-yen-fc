@@ -56,38 +56,6 @@ const app = initializeApp(firebaseConfig);
 const auth = getAuth(app);
 const db = getFirestore(app);
 
-const IPhone14Frame = ({ children }) => {
-  return (
-    <div className="md:flex md:items-center md:justify-center md:min-h-screen md:bg-slate-100 font-sans text-slate-900">
-      <div className="relative w-full h-screen md:h-[844px] md:w-[390px] md:border-gray-800 md:dark:border-gray-800 md:bg-gray-800 md:border-[14px] md:rounded-[3.5rem] md:shadow-[0_20px_50px_-12px_rgba(0,0,0,0.3)] overflow-hidden bg-white">
-        <div className="hidden md:block h-[32px] w-[3px] bg-gray-800 absolute -left-[17px] top-[72px] rounded-s-lg"></div>
-        <div className="hidden md:block h-[46px] w-[3px] bg-gray-800 absolute -left-[17px] top-[124px] rounded-s-lg"></div>
-        <div className="hidden md:block h-[46px] w-[3px] bg-gray-800 absolute -left-[17px] top-[178px] rounded-s-lg"></div>
-        <div className="hidden md:block h-[64px] w-[3px] bg-gray-800 absolute -right-[17px] top-[142px] rounded-e-lg"></div>
-
-        <div className="hidden md:flex absolute top-2 left-1/2 -translate-x-1/2 w-[120px] h-[35px] bg-black rounded-full z-50 items-center justify-center">
-           <div className="w-3 h-3 bg-[#0d0d0d] rounded-full ml-auto mr-4"></div>
-        </div>
-
-        <div className="hidden md:flex absolute top-0 left-0 right-0 h-12 items-center justify-between px-7 z-40 text-slate-900 drop-shadow-sm mix-blend-color-burn">
-          <span className="text-[15px] font-semibold tracking-tight mt-1">9:41</span>
-          <div className="flex items-center gap-1.5 mt-1">
-            <Signal size={15} strokeWidth={2.5} />
-            <Wifi size={15} strokeWidth={2.5} />
-            <Battery size={20} strokeWidth={2} />
-          </div>
-        </div>
-
-        <div className="h-full w-full bg-[#f4f6f8] overflow-hidden md:rounded-[2.5rem] relative">
-          {children}
-        </div>
-
-        <div className="hidden md:block absolute bottom-2 left-1/2 -translate-x-1/2 w-[130px] h-[5px] bg-slate-900/40 rounded-full z-50"></div>
-      </div>
-    </div>
-  );
-};
-
 export default function App() {
   const [user, setUser] = useState(null);
   const [isAdmin, setIsAdmin] = useState(false);
@@ -467,8 +435,8 @@ export default function App() {
   };
 
   return (
-    <IPhone14Frame>
-      <div className="flex flex-col h-full select-none overflow-hidden relative">
+    <div className="md:flex md:items-center md:justify-center md:min-h-screen md:bg-slate-100 font-sans text-slate-900">
+      <div className="w-full h-screen md:h-[844px] md:w-[390px] bg-[#f4f6f8] overflow-hidden md:rounded-[2.5rem] md:shadow-2xl flex flex-col select-none relative">
         
         {/* Header */}
         <header className="pt-14 pb-4 px-6 flex justify-between items-center bg-white shrink-0 z-10 relative border-b border-slate-100">
@@ -1051,6 +1019,6 @@ export default function App() {
         )}
 
       </div>
-    </IPhone14Frame>
+    </div>
   );
 }
