@@ -39,7 +39,17 @@ import {
   CalendarDays,
   MapPin,
   Clock,
-  Swords
+  Receipt,
+  PieChart,
+  Share2,
+  Download,
+  Eye,
+  FileText,
+  Tag,
+  Trophy,
+  List,
+  Crown,
+  Medal
 } from 'lucide-react';
 
 // --- Firebase Configuration (Cấu hình thật của Hoàng Yên FC) ---
@@ -62,16 +72,14 @@ export default function App() {
   const [isAdminView, setIsAdminView] = useState(true);
   
   const [currentScreen, setCurrentScreen] = useState('home'); 
-  const [activeMainTab, setActiveMainTab] = useState('info'); 
+  const [activeMainTab, setActiveMainTab] = useState('fund'); 
   const [activeFundTab, setActiveFundTab] = useState('transactions');
-  const [activeInfoTab, setActiveInfoTab] = useState('matches'); 
   
   const [transactions, setTransactions] = useState([]);
   const [donations, setDonations] = useState([]);
   const [tournaments, setTournaments] = useState([]);
+  const [teams, setTeams] = useState([]);
   const [photos, setPhotos] = useState([]);
-  const [matches, setMatches] = useState([]);
-  const [teams, setTeams] = useState([]); 
   const [activeTournamentId, setActiveTournamentId] = useState(null);
   
   const [showAddModal, setShowAddModal] = useState(false); 
@@ -85,6 +93,15 @@ export default function App() {
   
   const [newTournamentName, setNewTournamentName] = useState('');
   const [newTournamentImage, setNewTournamentImage] = useState('');
+  const [newTournamentTarget, setNewTournamentTarget] = useState('');
+  const [newTournamentCategory, setNewTournamentCategory] = useState('Quyên góp');
+  const [newTournamentPassword, setNewTournamentPassword] = useState('');
+  const [newTournamentTicketPrice, setNewTournamentTicketPrice] = useState('');
+  const [newTournamentTicketTarget, setNewTournamentTicketTarget] = useState('');
+  const [unlockedEvents, setUnlockedEvents] = useState({});
+  const [selectedTeamDetailName, setSelectedTeamDetailName] = useState(null);
+  const [eventAuthModal, setEventAuthModal] = useState({ isOpen: false, event: null, password: '', error: '' });
+  const [showReportPreview, setShowReportPreview] = useState(false);
 
   const [confirmModal, setConfirmModal] = useState({ isOpen: false, title: '', message: '', onConfirm: () => {}, type: 'danger' });
 
@@ -95,16 +112,12 @@ export default function App() {
     date: new Date().toISOString().split('T')[0],
     donorName: '',
     imageUrl: '',
-    homeTeam: '',
-    awayTeam: '',
-    group: 'Bảng A',
-    matchTime: '18:00',
-    location: 'Nhà Thờ Thanh An',
-    homeScore: '',
-    awayScore: '',
-    isCompleted: false,
+    category: 'Tài trợ',
+    ticketQuantity: '',
+    ticketPrice: '',
     teamName: '',
-    teamGroup: 'Bảng A'
+    teamMembers: '',
+    teamTicketQuota: ''
   });
 
   const fileInputRef = useRef(null);
@@ -128,12 +141,27 @@ export default function App() {
     return timeB - timeA;
   };
 
-  // Sắp xếp các trận đấu từ Cũ đến Mới (để hiển thị đúng tiến trình giải đấu)
-  const sortMatches = (a, b) => {
-    const dateA = new Date(`${a.date}T${a.time || '00:00'}`);
-    const dateB = new Date(`${b.date}T${b.time || '00:00'}`);
-    return dateA - dateB; 
-  };
+  const activeTournament = useMemo(() => tournaments.find(t => t.id === activeTournamentId) || null, [activeTournamentId, tournaments]);
+  const activeTournamentName = activeTournament?.name || '...';
+
+  // Tự động điều hướng nếu có eventId trong URL
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const eventId = params.get('eventId');
+    if (eventId) {
+      setActiveTournamentId(eventId);
+      setCurrentScreen('detail');
+    }
+  }, []);
+
+  // Chặn người dùng nếu họ truy cập bằng link trực tiếp vào sự kiện có mật khẩu
+  useEffect(() => {
+    if (currentScreen === 'detail' && activeTournament && !isAdmin && activeTournament.password && !unlockedEvents[activeTournament.id]) {
+      setEventAuthModal({ isOpen: true, event: activeTournament, password: '', error: '' });
+      setCurrentScreen('home'); 
+      window.history.pushState({}, '', window.location.pathname);
+    }
+  }, [currentScreen, activeTournament, isAdmin, unlockedEvents]);
 
   useEffect(() => {
     const initAuth = async () => {
@@ -152,95 +180,102 @@ export default function App() {
     const unsubTrans = onSnapshot(collection(db, 'transactions'), (snap) => setTransactions(snap.docs.map(doc => ({ id: doc.id, ...doc.data() })).sort(sortNewestFirst)));
     const unsubDonations = onSnapshot(collection(db, 'donations'), (snap) => setDonations(snap.docs.map(doc => ({ id: doc.id, ...doc.data() })).sort(sortNewestFirst)));
     const unsubPhotos = onSnapshot(collection(db, 'gallery'), (snap) => setPhotos(snap.docs.map(doc => ({ id: doc.id, ...doc.data() })).sort(sortNewestFirst)));
-    const unsubMatches = onSnapshot(collection(db, 'matches'), (snap) => setMatches(snap.docs.map(doc => ({ id: doc.id, ...doc.data() })).sort(sortMatches)));
     const unsubTeams = onSnapshot(collection(db, 'teams'), (snap) => setTeams(snap.docs.map(doc => ({ id: doc.id, ...doc.data() }))));
     const unsubTournaments = onSnapshot(collection(db, 'tournaments'), (snap) => setTournaments(snap.docs.map(doc => ({ id: doc.id, ...doc.data() })).sort((a, b) => new Date(b.createdAt || 0) - new Date(a.createdAt || 0))));
-    return () => { unsubTrans(); unsubDonations(); unsubPhotos(); unsubMatches(); unsubTeams(); unsubTournaments(); };
+    return () => { unsubTrans(); unsubDonations(); unsubPhotos(); unsubTeams(); unsubTournaments(); };
   }, [user]);
 
   const currentTransactions = useMemo(() => transactions.filter(t => t.tournamentId === activeTournamentId), [transactions, activeTournamentId]);
   const currentDonations = useMemo(() => donations.filter(d => d.tournamentId === activeTournamentId), [donations, activeTournamentId]);
-  const currentPhotos = useMemo(() => photos.filter(p => p.tournamentId === activeTournamentId), [photos, activeTournamentId]);
-  const currentMatches = useMemo(() => matches.filter(m => m.tournamentId === activeTournamentId), [matches, activeTournamentId]);
   const currentTeams = useMemo(() => teams.filter(t => t.tournamentId === activeTournamentId), [teams, activeTournamentId]);
-
-  // Tự động tính toán bảng xếp hạng
-  const standings = useMemo(() => {
-    const table = {}; 
-    const teamOverrides = {}; 
-    const teamIdMap = {};
-
-    currentTeams.forEach(t => {
-      teamOverrides[t.name] = t.group || 'Bảng Chung';
-      teamIdMap[t.name] = t.id;
-    });
-
-    const initTeam = (group, teamName) => {
-      if (!table[group]) table[group] = {};
-      if (!table[group][teamName]) {
-        table[group][teamName] = { 
-          id: teamIdMap[teamName] || null, 
-          name: teamName, 
-          group: group,
-          p: 0, w: 0, d: 0, l: 0, gf: 0, ga: 0, gd: 0, pts: 0 
-        };
-      }
-    };
-
-    currentTeams.forEach(t => {
-      initTeam(teamOverrides[t.name], t.name);
-    });
-
-    currentMatches.forEach(m => {
-      const hTeam = m.homeTeam || 'Đội 1';
-      const aTeam = m.awayTeam || m.opponent || 'Đội 2';
-      
-      const hGroup = teamOverrides[hTeam] || m.group || 'Bảng Chung';
-      const aGroup = teamOverrides[aTeam] || m.group || 'Bảng Chung';
-
-      initTeam(hGroup, hTeam);
-      initTeam(aGroup, aTeam);
-
-      if (m.isCompleted && m.homeScore !== null && m.homeScore !== '' && m.awayScore !== null && m.awayScore !== '') {
-        const hs = Number(m.homeScore);
-        const as = Number(m.awayScore);
-
-        const ht = table[hGroup][hTeam];
-        ht.p += 1; ht.gf += hs; ht.ga += as; ht.gd += (hs - as);
-        if (hs > as) { ht.w += 1; ht.pts += 3; }
-        else if (hs === as) { ht.d += 1; ht.pts += 1; }
-        else { ht.l += 1; }
-
-        const at = table[aGroup][aTeam];
-        at.p += 1; at.gf += as; at.ga += hs; at.gd += (as - hs);
-        if (as > hs) { at.w += 1; at.pts += 3; }
-        else if (as === hs) { at.d += 1; at.pts += 1; }
-        else { at.l += 1; }
-      }
-    });
-
-    const sortedStandings = [];
-    Object.keys(table).sort().forEach(group => {
-      const teamsList = Object.values(table[group]).sort((a, b) => {
-        if (b.pts !== a.pts) return b.pts - a.pts; 
-        if (b.gd !== a.gd) return b.gd - a.gd;     
-        if (b.gf !== a.gf) return b.gf - a.gf;     
-        return a.name.localeCompare(b.name);       
-      });
-      sortedStandings.push({ group, teams: teamsList });
-    });
-
-    return sortedStandings;
-  }, [currentMatches, currentTeams]);
+  const currentPhotos = useMemo(() => photos.filter(p => p.tournamentId === activeTournamentId), [photos, activeTournamentId]);
 
   const stats = useMemo(() => {
     const income = currentTransactions.filter(t => t.type === 'income').reduce((sum, t) => sum + Number(t.amount), 0);
     const expense = currentTransactions.filter(t => t.type === 'expense').reduce((sum, t) => sum + Number(t.amount), 0);
     const totalDonations = currentDonations.reduce((sum, d) => sum + Number(d.amount), 0);
-    return { balance: income - expense + totalDonations, totalIncome: income, totalExpense: expense, totalDonations: totalDonations };
+    let totalTicketsSold = 0;
+    const ticketsByDateMap = {};
+    
+    const expensesByCategory = {};
+    currentTransactions.filter(t => t.type === 'expense').forEach(t => {
+      const cat = t.category || 'Khác';
+      expensesByCategory[cat] = (expensesByCategory[cat] || 0) + Number(t.amount);
+    });
+    currentTransactions.filter(t => t.type === 'income').forEach(t => {
+      if (t.category === 'Bán vé') {
+        const qty = Number(t.ticketQuantity || 0);
+        totalTicketsSold += qty;
+        const d = t.date || 'Không rõ';
+        ticketsByDateMap[d] = (ticketsByDateMap[d] || 0) + qty;
+      }
+    });
+
+    const ticketsByDate = Object.entries(ticketsByDateMap).sort((a, b) => new Date(b[0]) - new Date(a[0]));
+
+    return { balance: income - expense + totalDonations, totalIncome: income, totalExpense: expense, totalDonations: totalDonations, expensesByCategory, totalTicketsSold, ticketsByDate };
   }, [currentTransactions, currentDonations]);
 
-  const activeTournamentName = useMemo(() => tournaments.find(t => t.id === activeTournamentId)?.name || '...', [activeTournamentId, tournaments]);
+  const reportData = useMemo(() => {
+    const currentAll = [
+      ...currentTransactions.map(t => ({
+        id: t.id,
+        date: t.date || '',
+        type: t.type === 'income' ? 'Thu Quỹ' : 'Chi Quỹ',
+        category: t.category || 'Khác',
+        note: t.note + (t.ticketQuantity ? ` (${t.ticketQuantity} vé${t.ticketPrice ? ` x ${formatNumberWithDots(t.ticketPrice)}đ` : ''})` : '') + (t.teamName ? ` - Đội: ${t.teamName}` : ''),
+        amount: t.type === 'expense' ? -Number(t.amount) : Number(t.amount)
+      })),
+      ...currentDonations.map(d => ({
+        id: d.id,
+        date: d.date || '',
+        type: 'Ủng Hộ',
+        category: 'Dâng cúng',
+        note: d.donorName + (d.note ? ` - ${d.note}` : ''),
+        amount: Number(d.amount)
+      }))
+    ];
+    return currentAll.sort((a, b) => new Date(b.date || 0) - new Date(a.date || 0));
+  }, [currentTransactions, currentDonations]);
+
+  const teamLeaderboard = useMemo(() => {
+    const teamsMap = {};
+    currentTeams.forEach(t => {
+      teamsMap[t.name] = { id: t.id, name: t.name, members: t.members || '', ticketQuota: t.ticketQuota || 0, tickets: 0, revenue: 0, ticketsByDateMap: {} };
+    });
+    currentTransactions.filter(t => t.type === 'income' && t.category === 'Bán vé' && t.teamName).forEach(t => {
+      const name = t.teamName;
+      if (!teamsMap[name]) teamsMap[name] = { id: null, name, members: '', ticketQuota: 0, tickets: 0, revenue: 0, ticketsByDateMap: {} };
+      const qty = Number(t.ticketQuantity || 0);
+      teamsMap[name].tickets += qty;
+      teamsMap[name].revenue += Number(t.amount || 0);
+      
+      const d = t.date || 'Không rõ';
+      teamsMap[name].ticketsByDateMap[d] = (teamsMap[name].ticketsByDateMap[d] || 0) + qty;
+    });
+    return Object.values(teamsMap).map(team => ({
+      ...team,
+      ticketsByDate: Object.entries(team.ticketsByDateMap).sort((a, b) => new Date(b[0]) - new Date(a[0]))
+    })).sort((a, b) => b.tickets - a.tickets || a.name.localeCompare(b.name));
+  }, [currentTransactions, currentTeams]);
+
+  const selectedTeamDetail = useMemo(() => teamLeaderboard.find(t => t.name === selectedTeamDetailName) || null, [teamLeaderboard, selectedTeamDetailName]);
+
+  const tournamentStats = useMemo(() => {
+    const statsMap = {};
+    tournaments.forEach(t => statsMap[t.id] = { balance: 0 });
+    transactions.forEach(tx => {
+      if (statsMap[tx.tournamentId]) {
+        statsMap[tx.tournamentId].balance += tx.type === 'income' ? Number(tx.amount) : -Number(tx.amount);
+      }
+    });
+    donations.forEach(d => {
+      if (statsMap[d.tournamentId]) {
+        statsMap[d.tournamentId].balance += Number(d.amount);
+      }
+    });
+    return statsMap;
+  }, [tournaments, transactions, donations]);
 
   const openConfirm = (title, message, onConfirm, type = 'danger') => setConfirmModal({ isOpen: true, title, message, onConfirm, type });
   const closeConfirm = () => setConfirmModal(prev => ({ ...prev, isOpen: false }));
@@ -260,10 +295,22 @@ export default function App() {
   };
 
   const goToDetail = (id) => { 
+    window.history.pushState({}, '', '?eventId=' + id);
     setActiveTournamentId(id); setCurrentScreen('detail'); 
-    setActiveMainTab('info'); setActiveFundTab('transactions'); setActiveInfoTab('matches'); 
+    setActiveMainTab('fund'); setActiveFundTab('transactions');
   };
-  const goHome = () => setCurrentScreen('home');
+  const goHome = () => {
+    window.history.pushState({}, '', window.location.pathname);
+    setCurrentScreen('home');
+  };
+
+  const handleEventClick = (t) => {
+    if (isAdmin || !t.password || unlockedEvents[t.id]) {
+      goToDetail(t.id);
+    } else {
+      setEventAuthModal({ isOpen: true, event: t, password: '', error: '' });
+    }
+  };
 
   const processImageFile = (file) => {
     return new Promise((resolve) => {
@@ -309,9 +356,7 @@ export default function App() {
 
   const resetFormData = () => {
     setFormData({
-      type: 'income', amount: '', note: '', date: new Date().toISOString().split('T')[0], donorName: '', imageUrl: '',
-      homeTeam: '', awayTeam: '', group: 'Bảng A', matchTime: '18:00', location: 'Nhà Thờ Thanh An', homeScore: '', awayScore: '', isCompleted: false,
-      teamName: '', teamGroup: 'Bảng A'
+      type: 'income', amount: '', note: '', date: new Date().toISOString().split('T')[0], donorName: '', imageUrl: '', category: 'Tài trợ', ticketQuantity: '', ticketPrice: '', teamName: '', teamMembers: '', teamTicketQuota: ''
     });
   };
 
@@ -325,16 +370,32 @@ export default function App() {
       date: item.date || new Date().toISOString().split('T')[0],
       donorName: item.donorName || '',
       imageUrl: item.imageUrl || '',
-      homeTeam: item.homeTeam || item.opponent || '', 
-      awayTeam: item.awayTeam || '',
-      group: item.group || 'Bảng A',
-      matchTime: item.time || '18:00',
-      location: item.location || 'Nhà Thờ Thanh An',
-      homeScore: item.homeScore !== null && item.homeScore !== undefined ? item.homeScore : '',
-      awayScore: item.awayScore !== null && item.awayScore !== undefined ? item.awayScore : '',
-      isCompleted: item.isCompleted || false,
-      teamName: item.name || '',
-      teamGroup: item.group || 'Bảng A'
+      category: item.category || 'Khác',
+      ticketQuantity: item.ticketQuantity || '',
+      ticketPrice: item.ticketPrice ? formatNumberWithDots(item.ticketPrice) : '',
+      teamName: item.teamName || item.name || '',
+      teamMembers: item.teamMembers || item.members || '',
+      teamTicketQuota: item.ticketQuota || ''
+    });
+    setShowAddModal(true);
+  };
+
+  const openQuickAddTicket = (teamName) => {
+    setEditingData(null);
+    setModalType('quick_ticket');
+    setFormData({
+      type: 'income',
+      amount: '',
+      note: 'Báo cáo vé bán',
+      date: new Date().toISOString().split('T')[0],
+      donorName: '',
+      imageUrl: '',
+      category: 'Bán vé',
+      ticketQuantity: '',
+      ticketPrice: activeTournament?.ticketPrice ? formatNumberWithDots(activeTournament.ticketPrice) : '',
+      teamName: teamName,
+      teamMembers: '',
+      teamTicketQuota: ''
     });
     setShowAddModal(true);
   };
@@ -350,31 +411,21 @@ export default function App() {
       if (modalType === 'fund') {
         if (formData.type === 'income' || formData.type === 'expense') {
           collectionName = 'transactions';
-          dataToSave = { type: formData.type, amount: parseFormattedNumber(formData.amount), note: formData.note, date: formData.date, tournamentId: activeTournamentId, updatedAt: timestamp };
+          dataToSave = { type: formData.type, amount: parseFormattedNumber(formData.amount), note: formData.note, date: formData.date, category: formData.category || 'Khác', ticketQuantity: (formData.category === 'Bán vé' && activeTournament?.category === 'Xổ số') ? Number(formData.ticketQuantity) || 0 : 0, ticketPrice: (formData.category === 'Bán vé' && activeTournament?.category === 'Xổ số') ? (parseFormattedNumber(formData.ticketPrice) || 0) : 0, teamName: (formData.category === 'Bán vé' && activeTournament?.category === 'Xổ số') ? formData.teamName.trim() : '', tournamentId: activeTournamentId, updatedAt: timestamp };
         } else if (formData.type === 'donation') {
           collectionName = 'donations';
           dataToSave = { donorName: formData.donorName, amount: parseFormattedNumber(formData.amount), note: formData.note, date: formData.date, tournamentId: activeTournamentId, updatedAt: timestamp };
         }
+      } else if (modalType === 'quick_ticket') {
+        collectionName = 'transactions';
+        dataToSave = { type: 'income', amount: parseFormattedNumber(formData.amount), note: formData.note, date: formData.date, category: 'Bán vé', ticketQuantity: Number(formData.ticketQuantity) || 0, ticketPrice: activeTournament?.ticketPrice ? Number(activeTournament.ticketPrice) : 0, teamName: formData.teamName, tournamentId: activeTournamentId, updatedAt: timestamp };
+      } else if (modalType === 'team') {
+        collectionName = 'teams';
+        dataToSave = { name: formData.teamName.trim(), members: formData.teamMembers, ticketQuota: Number(formData.teamTicketQuota) || 0, tournamentId: activeTournamentId, updatedAt: timestamp };
       } else if (modalType === 'gallery') {
         collectionName = 'gallery';
         if (!formData.imageUrl) { alert("Vui lòng đính kèm hình ảnh!"); return; }
         dataToSave = { imageUrl: formData.imageUrl, note: formData.note, tournamentId: activeTournamentId, updatedAt: timestamp };
-      } else if (modalType === 'match') {
-        collectionName = 'matches';
-        dataToSave = { 
-          homeTeam: formData.homeTeam, awayTeam: formData.awayTeam, group: formData.group, date: formData.date, time: formData.matchTime, location: formData.location, 
-          homeScore: formData.isCompleted ? Number(formData.homeScore) : null, 
-          awayScore: formData.isCompleted ? Number(formData.awayScore) : null,
-          isCompleted: formData.isCompleted, tournamentId: activeTournamentId, updatedAt: timestamp 
-        };
-      } else if (modalType === 'team') {
-        collectionName = 'teams';
-        dataToSave = {
-          name: formData.teamName.trim(),
-          group: formData.teamGroup.trim().toUpperCase(),
-          tournamentId: activeTournamentId,
-          updatedAt: timestamp
-        };
       }
 
       if (editingData && editingData.id) { 
@@ -391,7 +442,7 @@ export default function App() {
     if (!isAdmin || !isAdminView) return;
     openConfirm("Xác nhận xóa", "Hành động này không thể hoàn tác.", async () => {
       try {
-        const collectionName = type === 'transaction' ? 'transactions' : type === 'donation' ? 'donations' : type === 'gallery' ? 'gallery' : type === 'team' ? 'teams' : 'matches';
+        const collectionName = type === 'transaction' ? 'transactions' : type === 'donation' ? 'donations' : type === 'gallery' ? 'gallery' : 'teams';
         await deleteDoc(doc(db, collectionName, id));
         closeConfirm();
       } catch (err) { console.error(err); }
@@ -399,31 +450,80 @@ export default function App() {
   };
 
   const openTournamentModal = (tournament = null) => {
-    if (tournament) { setEditingTournament(tournament); setNewTournamentName(tournament.name); setNewTournamentImage(tournament.imageUrl || ''); } 
-    else { setEditingTournament(null); setNewTournamentName(''); setNewTournamentImage(''); }
+    if (tournament) { setEditingTournament(tournament); setNewTournamentName(tournament.name); setNewTournamentImage(tournament.imageUrl || ''); setNewTournamentTarget(tournament.targetAmount ? formatNumberWithDots(tournament.targetAmount) : ''); setNewTournamentCategory(tournament.category || 'Quyên góp'); setNewTournamentPassword(tournament.password || ''); setNewTournamentTicketPrice(tournament.ticketPrice ? formatNumberWithDots(tournament.ticketPrice) : ''); setNewTournamentTicketTarget(tournament.ticketTarget ? formatNumberWithDots(tournament.ticketTarget) : ''); } 
+    else { setEditingTournament(null); setNewTournamentName(''); setNewTournamentImage(''); setNewTournamentTarget(''); setNewTournamentCategory('Quyên góp'); setNewTournamentPassword(''); setNewTournamentTicketPrice(''); setNewTournamentTicketTarget(''); }
     setShowTournamentModal(true);
   };
 
   const handleSaveTournament = async (e) => {
     e.preventDefault();
-    if (!isAdmin || !newTournamentName.trim()) return;
+    if (!isAdmin || !isAdminView || !newTournamentName.trim()) return;
     try {
       const timestamp = new Date().toISOString();
+      const targetVal = parseFormattedNumber(newTournamentTarget) || 0;
+      const ticketPriceVal = parseFormattedNumber(newTournamentTicketPrice) || 0;
+      const ticketTargetVal = parseFormattedNumber(newTournamentTicketTarget) || 0;
       if (editingTournament) {
-        await updateDoc(doc(db, 'tournaments', editingTournament.id), { name: newTournamentName.trim(), imageUrl: newTournamentImage.trim(), updatedAt: timestamp });
+        await updateDoc(doc(db, 'tournaments', editingTournament.id), { name: newTournamentName.trim(), imageUrl: newTournamentImage.trim(), targetAmount: targetVal, category: newTournamentCategory, password: newTournamentPassword.trim(), ticketPrice: newTournamentCategory === 'Xổ số' ? ticketPriceVal : 0, ticketTarget: newTournamentCategory === 'Xổ số' ? ticketTargetVal : 0, updatedAt: timestamp });
       } else {
-        await addDoc(collection(db, 'tournaments'), { name: newTournamentName.trim(), imageUrl: newTournamentImage.trim(), createdAt: timestamp });
+        await addDoc(collection(db, 'tournaments'), { name: newTournamentName.trim(), imageUrl: newTournamentImage.trim(), targetAmount: targetVal, category: newTournamentCategory, password: newTournamentPassword.trim(), ticketPrice: newTournamentCategory === 'Xổ số' ? ticketPriceVal : 0, ticketTarget: newTournamentCategory === 'Xổ số' ? ticketTargetVal : 0, createdAt: timestamp });
       }
       setShowTournamentModal(false);
     } catch (err) { console.error(err); }
   };
 
   const handleDeleteTournament = async () => {
-    if (!editingTournament || !isAdmin) return;
-    openConfirm("Xóa giải đấu", `Bạn muốn xóa "${editingTournament.name}"?`, async () => {
+    if (!editingTournament || !isAdmin || !isAdminView) return;
+    openConfirm("Xóa sự kiện", `Bạn muốn xóa "${editingTournament.name}"?`, async () => {
       try { await deleteDoc(doc(db, 'tournaments', editingTournament.id)); setShowTournamentModal(false); closeConfirm(); } 
       catch (err) { console.error(err); }
     });
+  };
+
+  const handleShare = async () => {
+    const shareUrl = `${window.location.origin}${window.location.pathname}?eventId=${activeTournamentId}`;
+    try {
+      if (navigator.share) {
+        await navigator.share({
+          title: activeTournamentName,
+          text: `Xem tiến độ tài chính của sự kiện: ${activeTournamentName}`,
+          url: shareUrl
+        });
+      } else {
+        await navigator.clipboard.writeText(shareUrl);
+        alert('Đã sao chép link sự kiện vào khay nhớ tạm!');
+      }
+    } catch (err) {
+      console.error("Lỗi chia sẻ:", err);
+    }
+  };
+
+  const handleExportExcel = () => {
+    if (!isAdmin || !isAdminView) return;
+    const rows = [
+      ['Ngày', 'Phân Loại', 'Danh Mục', 'Nội Dung', 'Số Tiền (VNĐ)']
+    ];
+
+    reportData.forEach(item => {
+      rows.push([ item.date, item.type, item.category, `"${item.note.replace(/"/g, '""')}"`, item.amount ]);
+    });
+
+    rows.push(['', '', '', '', '']);
+    rows.push(['', 'Tổng Thu Quỹ:', '', '', stats.totalIncome]);
+    rows.push(['', 'Tổng Ủng Hộ:', '', '', stats.totalDonations]);
+    rows.push(['', 'Tổng Chi Quỹ:', '', '', stats.totalExpense]);
+    rows.push(['', 'SỐ DƯ HIỆN TẠI:', '', '', stats.balance]);
+
+    const csvContent = "\uFEFF" + rows.map(e => e.join(",")).join("\n");
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    
+    const link = document.createElement("a");
+    link.setAttribute("href", url);
+    link.setAttribute("download", `Bao_Cao_${activeTournamentName.replace(/\s+/g, '_')}.csv`);
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
   };
 
   const formatCurrency = (amount) => new Intl.NumberFormat('vi-VN').format(amount) + 'đ';
@@ -432,6 +532,17 @@ export default function App() {
     if (home > away) return 'bg-emerald-50 text-emerald-700 border-emerald-200';
     if (home < away) return 'bg-rose-50 text-rose-700 border-rose-200';
     return 'bg-slate-100 text-slate-700 border-slate-200';
+  };
+
+  const handleDeleteTicketsByDate = async (teamName, date) => {
+    if (!isAdmin || !isAdminView) return;
+    openConfirm("Xóa dữ liệu ngày", `Bạn có chắc chắn muốn xóa toàn bộ giao dịch bán vé ngày ${date} của đội "${teamName}"?`, async () => {
+      try {
+        const toDelete = transactions.filter(t => t.tournamentId === activeTournamentId && t.teamName === teamName && t.date === date && t.type === 'income' && t.category === 'Bán vé');
+        await Promise.all(toDelete.map(t => deleteDoc(doc(db, 'transactions', t.id))));
+        closeConfirm();
+      } catch (err) { console.error(err); }
+    });
   };
 
   return (
@@ -445,57 +556,81 @@ export default function App() {
               <div className="w-10 h-10 bg-slate-900 rounded-[1rem] flex items-center justify-center text-white shadow-sm">
                 <Church size={22} strokeWidth={2.5} />
               </div>
-              <div><h1 className="text-[17px] font-black tracking-tight leading-tight uppercase">Hoàng Yên FC</h1><p className="text-[10px] font-bold text-slate-400 tracking-wider mt-0.5">HỆ THỐNG QUẢN LÝ</p></div>
+              <div><h1 className="text-[17px] font-black tracking-tight leading-tight uppercase">Giáo Xứ Hoàng Yên</h1><p className="text-[10px] font-bold text-slate-400 tracking-wider mt-0.5">TÀI CHÍNH SỰ KIỆN</p></div>
             </div>
           ) : (
             <div className="flex items-center gap-3">
               <button onClick={goHome} className="w-10 h-10 bg-slate-50 rounded-[1rem] flex items-center justify-center text-slate-700 shadow-sm border border-slate-200 active:scale-95 transition-transform">
                 <ChevronLeft size={24} strokeWidth={2.5} className="-ml-0.5" />
               </button>
-              <div><h1 className="text-[17px] font-black tracking-tight leading-tight truncate max-w-[150px] uppercase">{activeTournamentName}</h1><p className="text-[10px] font-bold text-slate-400 tracking-wider mt-0.5">CHI TIẾT GIẢI ĐẤU</p></div>
+              <div><h1 className="text-[17px] font-black tracking-tight leading-tight truncate max-w-[150px] uppercase">{activeTournamentName}</h1><p className="text-[10px] font-bold text-slate-400 tracking-wider mt-0.5">CHI TIẾT SỰ KIỆN</p></div>
             </div>
           )}
-          <button 
-            onClick={handleShieldClick}
-            className={`w-10 h-10 rounded-full flex items-center justify-center transition-all shadow-sm ${isAdmin ? (isAdminView ? 'bg-amber-100 text-amber-600' : 'bg-emerald-100 text-emerald-600') : 'bg-slate-100 text-slate-400 hover:bg-slate-200'}`}
-          >
-            {isAdmin ? <ShieldCheck size={20} /> : <Lock size={18} />}
-          </button>
+          <div className="flex items-center gap-2">
+            {currentScreen === 'detail' && (
+              <button onClick={handleShare} title="Chia sẻ sự kiện" className="w-10 h-10 rounded-full flex items-center justify-center transition-all shadow-sm bg-slate-100 text-slate-600 hover:bg-slate-200 active:scale-95">
+                <Share2 size={18} />
+              </button>
+            )}
+            <button 
+              onClick={handleShieldClick}
+              className={`w-10 h-10 rounded-full flex items-center justify-center transition-all shadow-sm ${isAdmin ? (isAdminView ? 'bg-amber-100 text-amber-600' : 'bg-emerald-100 text-emerald-600') : 'bg-slate-100 text-slate-400 hover:bg-slate-200'}`}
+            >
+              {isAdmin ? <ShieldCheck size={20} /> : <Lock size={18} />}
+            </button>
+          </div>
         </header>
 
-        {/* NỘI DUNG MÀN HÌNH CHÍNH (Danh sách giải đấu) */}
+        {/* NỘI DUNG MÀN HÌNH CHÍNH (Danh sách sự kiện) */}
         {currentScreen === 'home' && (
           <main className="flex-1 overflow-y-auto pb-32 bg-[#f4f6f8] [&::-webkit-scrollbar]:hidden [-ms-overflow-style:none] [scrollbar-width:none]">
             <div className="px-5 pt-5 pb-6">
-              <h2 className="text-xs font-black text-slate-400 mb-4 px-1 uppercase tracking-widest">Danh sách Giải đấu</h2>
+              <h2 className="text-xs font-black text-slate-400 mb-4 px-1 uppercase tracking-widest">Danh sách Sự kiện</h2>
               <div className="flex flex-col gap-5">
                 {tournaments.length === 0 ? (
                   <div className="text-center py-10 text-slate-400 bg-white rounded-[1.75rem] border border-slate-200 border-dashed">
-                    <p className="text-sm font-medium">Chưa có giải đấu nào.</p>
-                    {isAdmin && <p className="text-xs mt-1">Bấm dấu + ở góc dưới để thêm mới.</p>}
+                    <p className="text-sm font-medium">Chưa có sự kiện nào.</p>
+                    {isAdmin && isAdminView && <p className="text-xs mt-1">Bấm dấu + ở góc dưới để thêm mới.</p>}
                   </div>
                 ) : (
-                  tournaments.map(t => (
-                    <div key={t.id} onClick={() => goToDetail(t.id)} className="relative h-[330px] rounded-[2rem] overflow-hidden shadow-lg cursor-pointer group active:scale-[0.98] transition-transform bg-slate-200 border border-black/5">
-                      <img src={t.imageUrl || defaultTournamentImg} alt={t.name} className="w-full h-full object-cover" />
-                      <div className="absolute inset-0 bg-gradient-to-t from-slate-900 via-slate-900/40 to-black/5"></div>
-                      {isAdmin && (
-                        <button onClick={(e) => { e.stopPropagation(); openTournamentModal(t); }} className="absolute top-4 right-4 bg-white/20 backdrop-blur-md p-2.5 rounded-2xl text-white hover:bg-white/30 transition-colors z-20">
-                          <Edit2 size={18} strokeWidth={2.5} />
-                        </button>
-                      )}
-                      <div className="absolute bottom-0 left-0 p-6 w-full">
-                        <div className="bg-emerald-500 text-white text-[10px] font-black px-2.5 py-1 rounded-lg inline-block mb-2 uppercase tracking-wider">MÙA GIẢI MỚI</div>
-                        <h3 className="text-white font-black text-[22px] leading-tight line-clamp-2 shadow-black/50 drop-shadow-md">{t.name}</h3>
-                        <p className="text-white/70 text-xs font-bold tracking-wide mt-2 flex items-center gap-1.5 uppercase"><ArrowUpRight size={14} strokeWidth={3}/> Xem chi tiết</p>
+                  tournaments.map(t => {
+                    const tStats = tournamentStats[t.id] || { balance: 0 };
+                    const progressPercent = t.targetAmount ? Math.max(0, Math.min(Math.round((tStats.balance / t.targetAmount) * 100), 100)) : 0;
+                    return (
+                      <div key={t.id} onClick={() => handleEventClick(t)} className="relative h-[330px] rounded-[2rem] overflow-hidden shadow-lg cursor-pointer group active:scale-[0.98] transition-transform bg-slate-200 border border-black/5">
+                        <img src={t.imageUrl || defaultTournamentImg} alt={t.name} className="w-full h-full object-cover" />
+                        <div className="absolute inset-0 bg-gradient-to-t from-slate-900 via-slate-900/40 to-black/5"></div>
+                        {isAdmin && isAdminView && (
+                          <button onClick={(e) => { e.stopPropagation(); openTournamentModal(t); }} className="absolute top-4 right-4 bg-white/20 backdrop-blur-md p-2.5 rounded-2xl text-white hover:bg-white/30 transition-colors z-20">
+                            <Edit2 size={18} strokeWidth={2.5} />
+                          </button>
+                        )}
+                        <div className="absolute bottom-0 left-0 p-6 w-full">
+                          <div className="bg-emerald-500 text-white text-[10px] font-black px-2.5 py-1 rounded-lg inline-flex items-center gap-1 mb-2 uppercase tracking-wider">
+                            {t.password && <Lock size={10} strokeWidth={3} />} {t.category || 'SỰ KIỆN'}
+                          </div>
+                          <h3 className="text-white font-black text-[22px] leading-tight line-clamp-2 shadow-black/50 drop-shadow-md">{t.name}</h3>
+                          {t.targetAmount > 0 && (
+                            <div className="mt-3 bg-black/20 p-2.5 rounded-xl backdrop-blur-sm border border-white/10">
+                              <div className="flex justify-between text-white/90 text-[10px] font-bold mb-1.5">
+                                <span>Đã đạt: {formatCurrency(tStats.balance)}</span>
+                                <span>Mục tiêu: {formatCurrency(t.targetAmount)}</span>
+                              </div>
+                              <div className="w-full bg-white/20 rounded-full h-1.5 overflow-hidden">
+                                <div className="bg-emerald-400 h-full rounded-full" style={{ width: `${progressPercent}%` }}></div>
+                              </div>
+                            </div>
+                          )}
+                          <p className="text-white/70 text-[11px] font-bold tracking-wide mt-3 flex items-center gap-1.5 uppercase"><ArrowUpRight size={14} strokeWidth={3}/> Xem chi tiết</p>
+                        </div>
                       </div>
-                    </div>
-                  ))
+                    )
+                  })
                 )}
               </div>
             </div>
             {/* Nút FAB Home */}
-            {isAdmin && (
+            {isAdmin && isAdminView && (
               <button onClick={() => { setEditingData(null); openTournamentModal(); }} className="fixed bottom-10 right-6 w-14 h-14 bg-slate-900 text-white rounded-full shadow-2xl flex items-center justify-center z-30 active:scale-95 transition-transform border-4 border-white">
                 <Plus size={28} strokeWidth={3} />
               </button>
@@ -503,157 +638,9 @@ export default function App() {
           </main>
         )}
 
-        {/* NỘI DUNG MÀN HÌNH CHI TIẾT GIẢI ĐẤU (Có 3 Tab) */}
+        {/* NỘI DUNG MÀN HÌNH CHI TIẾT SỰ KIỆN */}
         {currentScreen === 'detail' && (
           <main className="flex-1 overflow-y-auto pb-[100px] bg-[#f4f6f8] [&::-webkit-scrollbar]:hidden [-ms-overflow-style:none] [scrollbar-width:none]">
-            
-            {/* --- TAB 1: THÔNG TIN (Lịch đấu & Bảng xếp hạng) --- */}
-            {activeMainTab === 'info' && (
-              <div className="animate-in fade-in slide-in-from-bottom-4 duration-300 px-5 pt-5">
-                
-                {/* Sub-tabs cho Thông tin */}
-                <div className="flex bg-slate-200/70 p-1.5 rounded-2xl mb-5 overflow-x-auto [&::-webkit-scrollbar]:hidden">
-                  <button onClick={() => setActiveInfoTab('matches')} className={`flex-1 min-w-[120px] py-2.5 text-[13px] font-bold rounded-xl transition-all duration-200 ${activeInfoTab === 'matches' ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-500'}`}>Lịch Đấu</button>
-                  <button onClick={() => setActiveInfoTab('standings')} className={`flex-1 min-w-[120px] py-2.5 text-[13px] font-bold rounded-xl transition-all duration-200 ${activeInfoTab === 'standings' ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-500'}`}>Bảng Xếp Hạng</button>
-                </div>
-
-                <h2 className="text-xs font-black text-slate-400 mb-4 px-1 uppercase tracking-widest">
-                  {activeInfoTab === 'matches' ? 'Lịch đấu & Kết quả' : 'Cập nhật điểm số'}
-                </h2>
-
-                {activeInfoTab === 'matches' ? (
-                  currentMatches.length === 0 ? (
-                    <div className="text-center py-10 text-slate-400 bg-white rounded-[1.5rem] border border-slate-200">
-                      <p className="text-sm font-medium">Chưa có trận đấu nào.</p>
-                    </div>
-                  ) : (
-                    <div className="flex flex-col gap-4 pb-8">
-                      {currentMatches.map(match => {
-                        const hTeam = match.homeTeam || 'Đội 1';
-                        const aTeam = match.awayTeam || match.opponent || 'Đội 2';
-                        const isHomeWinner = match.isCompleted && Number(match.homeScore) > Number(match.awayScore);
-                        const isAwayWinner = match.isCompleted && Number(match.awayScore) > Number(match.homeScore);
-
-                        return (
-                          <div key={match.id} className="bg-white rounded-[1.5rem] p-5 shadow-[0_4px_20px_-4px_rgba(0,0,0,0.05)] border border-slate-100 relative">
-                            <div className="flex justify-between items-start mb-4 border-b border-slate-50 pb-3">
-                              <div className="flex flex-col gap-1.5">
-                                <span className="px-3 py-1 bg-slate-900 text-white rounded-lg text-[10px] font-black uppercase tracking-widest w-fit">
-                                  {match.group || 'Bảng Chung'}
-                                </span>
-                                <div className="flex items-center gap-1.5 text-xs font-bold text-slate-400">
-                                  <CalendarDays size={13}/> {match.date} <span className="text-slate-200 mx-0.5">•</span> <Clock size={13}/> {match.time}
-                                </div>
-                              </div>
-                              <div className={`px-2.5 py-1 rounded-lg text-[10px] font-black uppercase tracking-wider ${match.isCompleted ? 'bg-slate-100 text-slate-500' : 'bg-emerald-50 text-emerald-600 border border-emerald-100 animate-pulse'}`}>
-                                {match.isCompleted ? 'Đã kết thúc' : 'Sắp diễn ra'}
-                              </div>
-                            </div>
-
-                            <div className="flex items-center justify-between mt-3 mb-5 gap-2">
-                              {/* Đội Nhà */}
-                              <div className={`flex flex-col items-center gap-2.5 flex-1 w-0 py-2 rounded-2xl transition-all ${isHomeWinner ? 'bg-emerald-50 border border-emerald-100/50 shadow-sm scale-105' : ''}`}>
-                                <div className={`w-14 h-14 rounded-[1.2rem] flex items-center justify-center shadow-md font-black text-xl shrink-0 ${isHomeWinner ? 'bg-emerald-500 text-white ring-4 ring-emerald-100' : 'bg-slate-900 text-white'}`}>
-                                  {hTeam.charAt(0).toUpperCase()}
-                                </div>
-                                <span className={`font-bold text-[13px] text-center line-clamp-2 px-1 leading-snug ${isHomeWinner ? 'text-emerald-700' : 'text-slate-800'}`}>{hTeam}</span>
-                              </div>
-
-                              {/* Tỉ số / VS */}
-                              <div className="flex-1 flex justify-center shrink-0 px-1">
-                                {match.isCompleted ? (
-                                  <div className={`px-4 py-2.5 rounded-2xl border-[2.5px] flex items-center gap-3 ${getMatchResultColor(match.homeScore, match.awayScore)}`}>
-                                    <span className="text-3xl font-black">{match.homeScore}</span>
-                                    <span className="text-lg opacity-40 font-black">-</span>
-                                    <span className="text-3xl font-black">{match.awayScore}</span>
-                                  </div>
-                                ) : (
-                                  <div className="bg-slate-50 text-slate-400 px-4 py-2 rounded-2xl border-2 border-slate-100 font-black text-xl tracking-wider shadow-inner">
-                                    {match.time}
-                                  </div>
-                                )}
-                              </div>
-
-                              {/* Đội Khách */}
-                              <div className={`flex flex-col items-center gap-2.5 flex-1 w-0 py-2 rounded-2xl transition-all ${isAwayWinner ? 'bg-emerald-50 border border-emerald-100/50 shadow-sm scale-105' : ''}`}>
-                                <div className={`w-14 h-14 rounded-[1.2rem] flex items-center justify-center shadow-md font-black text-xl shrink-0 ${isAwayWinner ? 'bg-emerald-500 text-white ring-4 ring-emerald-100 border-none' : 'bg-slate-50 border-2 border-slate-200 text-slate-500'}`}>
-                                  {aTeam.charAt(0).toUpperCase()}
-                                </div>
-                                <span className={`font-bold text-[13px] text-center line-clamp-2 px-1 leading-snug ${isAwayWinner ? 'text-emerald-700' : 'text-slate-800'}`}>{aTeam}</span>
-                              </div>
-                            </div>
-
-                            <div className="flex items-center justify-between pt-3 border-t border-slate-50">
-                              <div className="flex items-center gap-1.5 text-[11px] font-bold text-slate-400 truncate pr-4 uppercase tracking-wide">
-                                <MapPin size={13} className="text-rose-500 shrink-0"/> <span className="truncate">{match.location || 'Nhà Thờ Thanh An'}</span>
-                              </div>
-                              {isAdmin && isAdminView && (
-                                <div className="flex gap-2 shrink-0">
-                                  <button onClick={() => openEditDataModal(match, 'match', 'match')} className="p-1.5 text-slate-400 hover:text-emerald-500 bg-slate-50 rounded-lg"><Edit2 size={15} /></button>
-                                  <button onClick={() => handleDeleteData(match.id, 'match')} className="p-1.5 text-slate-400 hover:text-rose-500 bg-slate-50 rounded-lg"><Trash2 size={15} /></button>
-                                </div>
-                              )}
-                            </div>
-                          </div>
-                        )
-                      })}
-                    </div>
-                  )
-                ) : (
-                  // BẢNG XẾP HẠNG (Tự động gộp đội từ form edit)
-                  <div className="flex flex-col gap-6 pb-8">
-                    {standings.length === 0 ? (
-                      <div className="text-center py-10 text-slate-400 bg-white rounded-[1.5rem] border border-slate-200">
-                        <p className="text-sm font-medium">Chưa có dữ liệu xếp hạng.</p>
-                      </div>
-                    ) : (
-                      standings.map((groupData, idx) => (
-                        <div key={idx} className="bg-white rounded-[1.5rem] shadow-[0_4px_20px_-4px_rgba(0,0,0,0.05)] border border-slate-100 overflow-hidden">
-                          <div className="bg-slate-900 text-white px-5 py-3">
-                            <h3 className="font-black text-[13px] uppercase tracking-wider">{groupData.group}</h3>
-                          </div>
-                          <div className="overflow-x-auto">
-                            <table className="w-full text-left border-collapse min-w-[320px]">
-                              <thead>
-                                <tr className="bg-slate-50 text-slate-400 text-[10px] uppercase tracking-wider border-b border-slate-100">
-                                  <th className="px-3 py-3 font-black">Đội Bóng</th>
-                                  <th className="px-1 py-3 font-black text-center min-w-[30px]" title="Số trận">Tr</th>
-                                  <th className="px-1 py-3 font-black text-center min-w-[45px]" title="Thắng - Hòa - Thua">T-H-B</th>
-                                  <th className="px-1 py-3 font-black text-center min-w-[35px]" title="Hiệu số">HS</th>
-                                  <th className="px-3 py-3 font-black text-center text-emerald-600 min-w-[40px]" title="Điểm số">Đ</th>
-                                </tr>
-                              </thead>
-                              <tbody className="text-[13px]">
-                                {groupData.teams.map((team, tIdx) => (
-                                  <tr key={team.name} className="border-b border-slate-50 last:border-0 hover:bg-slate-50 transition-colors">
-                                    <td className="px-3 py-3.5 flex flex-col justify-center min-h-[55px]">
-                                      <div className="flex items-center gap-2">
-                                        <span className={`shrink-0 w-5 text-center text-[11px] font-black ${tIdx < 2 ? 'text-slate-900 bg-slate-100 rounded-md py-0.5' : 'text-slate-400'}`}>{tIdx + 1}</span>
-                                        <span className="w-[110px] md:w-[150px] break-words line-clamp-2 text-slate-800 font-bold leading-tight">{team.name}</span>
-                                      </div>
-                                      {isAdmin && isAdminView && (
-                                        <div className="flex items-center gap-1.5 mt-1.5 ml-7">
-                                          <button onClick={() => openEditDataModal(team, 'team', 'team')} className="p-1 text-slate-400 hover:text-emerald-500 bg-slate-50 rounded-md border border-slate-100"><Edit2 size={11} /></button>
-                                          {team.id && <button onClick={() => handleDeleteData(team.id, 'team')} className="p-1 text-slate-400 hover:text-rose-500 bg-slate-50 rounded-md border border-slate-100"><Trash2 size={11} /></button>}
-                                        </div>
-                                      )}
-                                    </td>
-                                    <td className="px-1 py-3.5 font-semibold text-slate-500 text-center align-middle">{team.p}</td>
-                                    <td className="px-1 py-3.5 font-semibold text-slate-500 text-center align-middle">{team.w}-{team.d}-{team.l}</td>
-                                    <td className="px-1 py-3.5 font-bold text-slate-500 text-center align-middle">{team.gd > 0 ? `+${team.gd}` : team.gd}</td>
-                                    <td className="px-3 py-3.5 font-black text-emerald-600 text-center text-[15px] align-middle">{team.pts}</td>
-                                  </tr>
-                                ))}
-                              </tbody>
-                            </table>
-                          </div>
-                        </div>
-                      ))
-                    )}
-                  </div>
-                )}
-              </div>
-            )}
 
             {/* --- TAB 2: THU CHI --- */}
             {activeMainTab === 'fund' && (
@@ -662,6 +649,31 @@ export default function App() {
                   <div className="relative z-10">
                     <div className="flex items-center gap-2 text-slate-400 mb-2"><Wallet size={16} /><p className="text-[11px] font-bold uppercase tracking-widest">Số Dư Quỹ</p></div>
                     <h2 className="text-[32px] font-black tracking-tight mb-6">{formatCurrency(stats.balance)}</h2>
+                    
+                    {activeTournament?.targetAmount > 0 && (
+                      <div className={`${activeTournament?.category === 'Xổ số' && activeTournament?.ticketTarget > 0 ? 'mb-3' : 'mb-6'} bg-white/5 p-4 rounded-2xl border border-white/10`}>
+                        <div className="flex justify-between text-[11px] font-bold text-slate-300 mb-2">
+                          <span>Tiến độ: {Math.max(0, Math.min(Math.round((stats.balance / activeTournament.targetAmount) * 100), 100))}%</span>
+                          <span>Mục tiêu: {formatCurrency(activeTournament.targetAmount)}</span>
+                        </div>
+                        <div className="w-full bg-slate-800 rounded-full h-2 overflow-hidden shadow-inner">
+                          <div className="bg-emerald-500 h-full rounded-full shadow-[0_0_10px_rgba(16,185,129,0.5)] transition-all duration-1000" style={{ width: `${Math.max(0, Math.min(Math.round((stats.balance / activeTournament.targetAmount) * 100), 100))}%` }}></div>
+                        </div>
+                      </div>
+                    )}
+
+                    {activeTournament?.category === 'Xổ số' && activeTournament?.ticketTarget > 0 && (
+                      <div className="mb-6 bg-white/5 p-4 rounded-2xl border border-white/10">
+                        <div className="flex justify-between text-[11px] font-bold text-slate-300 mb-2">
+                          <span className="flex items-center gap-1.5"><Tag size={12}/> Tiến độ vé: {Math.max(0, Math.min(Math.round((stats.totalTicketsSold / activeTournament.ticketTarget) * 100), 100))}%</span>
+                          <span>Đã bán: {formatNumberWithDots(stats.totalTicketsSold)} / {formatNumberWithDots(activeTournament.ticketTarget)}</span>
+                        </div>
+                        <div className="w-full bg-slate-800 rounded-full h-2 overflow-hidden shadow-inner">
+                          <div className="bg-amber-400 h-full rounded-full shadow-[0_0_10px_rgba(251,191,36,0.5)] transition-all duration-1000" style={{ width: `${Math.max(0, Math.min(Math.round((stats.totalTicketsSold / activeTournament.ticketTarget) * 100), 100))}%` }}></div>
+                        </div>
+                      </div>
+                    )}
+
                     <div className="grid grid-cols-2 gap-4">
                       <div className="bg-white/10 rounded-2xl p-4 border border-white/5"><div className="flex items-center gap-1.5 text-emerald-400 mb-1"><TrendingUp size={14} strokeWidth={3} /><p className="text-[10px] font-black uppercase tracking-wider">Tổng Thu</p></div><p className="font-bold text-[15px]">+{formatCurrency(stats.totalIncome + stats.totalDonations)}</p></div>
                       <div className="bg-white/10 rounded-2xl p-4 border border-white/5"><div className="flex items-center gap-1.5 text-rose-400 mb-1"><TrendingDown size={14} strokeWidth={3} /><p className="text-[10px] font-black uppercase tracking-wider">Đã Chi</p></div><p className="font-bold text-[15px]">-{formatCurrency(stats.totalExpense)}</p></div>
@@ -672,19 +684,124 @@ export default function App() {
                 </div>
 
                 <div className="flex bg-slate-200/70 p-1.5 rounded-2xl mb-5">
-                  <button onClick={() => setActiveFundTab('transactions')} className={`flex-1 py-2.5 text-[13px] font-bold rounded-xl transition-all duration-200 ${activeFundTab === 'transactions' ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-500'}`}>Giao Dịch</button>
-                  <button onClick={() => setActiveFundTab('donations')} className={`flex-1 py-2.5 text-[13px] font-bold rounded-xl transition-all duration-200 ${activeFundTab === 'donations' ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-500'}`}>Ủng Hộ</button>
+                  <button onClick={() => setActiveFundTab('transactions')} className={`flex-1 py-2.5 text-[12px] font-bold rounded-xl transition-all duration-200 ${activeFundTab === 'transactions' ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-500'}`}>Giao Dịch</button>
+                  <button onClick={() => setActiveFundTab('donations')} className={`flex-1 py-2.5 text-[12px] font-bold rounded-xl transition-all duration-200 ${activeFundTab === 'donations' ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-500'}`}>Ủng Hộ</button>
+                  <button onClick={() => setActiveFundTab('stats')} className={`flex-1 py-2.5 text-[12px] font-bold rounded-xl transition-all duration-200 ${activeFundTab === 'stats' ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-500'}`}>Thống Kê</button>
                 </div>
 
                 <h2 className="text-xs font-black text-slate-400 mb-4 px-1 uppercase tracking-widest">
-                  {activeFundTab === 'transactions' ? 'Lịch sử giao dịch' : 'Danh sách ủng hộ'}
+                  {activeFundTab === 'transactions' ? 'Lịch sử giao dịch' : activeFundTab === 'donations' ? 'Danh sách ủng hộ' : 'Thống kê tổng quan'}
                 </h2>
                 
                 <div className="space-y-3 pb-8">
-                  {(activeFundTab === 'transactions' ? currentTransactions : currentDonations).length === 0 ? (
-                    <div className="text-center py-10 text-slate-400 bg-white rounded-[1.5rem] border border-slate-200"><p className="text-sm font-medium">Chưa có dữ liệu.</p></div>
-                  ) : (
-                    (activeFundTab === 'transactions' ? currentTransactions : currentDonations).map(item => (
+                  {activeFundTab === 'stats' ? (
+                    (() => {
+                      const totalVolume = stats.totalIncome + stats.totalDonations + stats.totalExpense;
+                      const incomePercent = totalVolume > 0 ? ((stats.totalIncome + stats.totalDonations) / totalVolume) * 100 : 0;
+                      const expensePercent = totalVolume > 0 ? (stats.totalExpense / totalVolume) * 100 : 0;
+                      return (
+                        <div className="bg-white p-6 rounded-[1.5rem] shadow-[0_2px_10px_-4px_rgba(0,0,0,0.03)] border border-slate-100/50 flex flex-col items-center">
+                          {totalVolume === 0 ? (
+                            <p className="text-slate-400 text-sm font-medium py-10">Chưa có dữ liệu thống kê.</p>
+                          ) : (
+                            <>
+                              <div className="relative w-40 h-40 rounded-full flex items-center justify-center mb-8 mt-2 shadow-[0_0_20px_rgba(0,0,0,0.05)]" style={{ background: `conic-gradient(#34d399 0% ${incomePercent}%, #fb7185 ${incomePercent}% 100%)` }}>
+                                <div className="w-28 h-28 bg-white rounded-full flex flex-col items-center justify-center shadow-inner">
+                                  <PieChart size={24} className="text-slate-300 mb-1" strokeWidth={2} />
+                                </div>
+                              </div>
+                              <div className="w-full flex gap-3">
+                                <div className="flex-1 bg-emerald-50 rounded-2xl p-4 border border-emerald-100/50">
+                                  <div className="flex items-center gap-1.5 mb-2"><div className="w-2.5 h-2.5 rounded-full bg-emerald-400 shadow-sm"></div><span className="text-[10px] font-black uppercase text-emerald-600 tracking-wider">Tổng Thu</span></div>
+                                  <div className="text-[17px] font-black text-emerald-700">{incomePercent.toFixed(1)}%</div>
+                                  <div className="text-[11px] font-bold text-emerald-600/60 mt-0.5">{formatCurrency(stats.totalIncome + stats.totalDonations)}</div>
+                                </div>
+                                <div className="flex-1 bg-rose-50 rounded-2xl p-4 border border-rose-100/50">
+                                  <div className="flex items-center gap-1.5 mb-2"><div className="w-2.5 h-2.5 rounded-full bg-rose-400 shadow-sm"></div><span className="text-[10px] font-black uppercase text-rose-600 tracking-wider">Tổng Chi</span></div>
+                                  <div className="text-[17px] font-black text-rose-700">{expensePercent.toFixed(1)}%</div>
+                                  <div className="text-[11px] font-bold text-rose-600/60 mt-0.5">{formatCurrency(stats.totalExpense)}</div>
+                                </div>
+                              </div>
+                              {Object.keys(stats.expensesByCategory).length > 0 && (
+                                <div className="w-full mt-6 pt-6 border-t border-slate-100/50">
+                                  <h3 className="text-[11px] font-black uppercase text-slate-400 tracking-wider mb-4 text-left w-full">Chi tiết hạng mục Chi</h3>
+                                  <div className="space-y-3 w-full">
+                                    {Object.entries(stats.expensesByCategory)
+                                      .sort((a,b) => b[1] - a[1])
+                                      .map(([cat, amount]) => (
+                                      <div key={cat} className="flex items-center justify-between">
+                                        <div className="flex items-center gap-2">
+                                          <div className="w-2 h-2 rounded-full bg-rose-400"></div>
+                                          <span className="text-[13px] font-bold text-slate-700">{cat}</span>
+                                        </div>
+                                        <span className="text-[13px] font-black text-rose-600">-{formatCurrency(amount)}</span>
+                                      </div>
+                                    ))}
+                                  </div>
+                                </div>
+                              )}
+                              {activeTournament?.category === 'Xổ số' && (
+                                <>
+                                  <div className="w-full mt-3 bg-amber-50 rounded-2xl p-4 border border-amber-100/50 flex justify-between items-center">
+                                    <div className="flex items-center gap-2">
+                                      <div className="w-8 h-8 rounded-full bg-amber-100 flex items-center justify-center text-amber-600"><Tag size={16} strokeWidth={2.5}/></div>
+                                      <span className="text-[13px] font-bold text-amber-800">Tổng Số Vé Bán Ra</span>
+                                    </div>
+                                    <span className="text-[20px] font-black text-amber-600">{formatNumberWithDots(stats.totalTicketsSold)} vé</span>
+                                  </div>
+                                  {stats.ticketsByDate?.length > 0 && (
+                                    <div className="w-full mt-4 pt-4 border-t border-slate-100/50">
+                                      <h3 className="text-[11px] font-black uppercase text-slate-400 tracking-wider mb-3 text-left w-full">Tiến độ bán vé theo ngày</h3>
+                                      <div className="space-y-2.5 w-full">
+                                        {stats.ticketsByDate.map(([date, qty]) => (
+                                          <div key={date} className="flex items-center justify-between">
+                                            <div className="flex items-center gap-2">
+                                              <div className="w-1.5 h-1.5 rounded-full bg-amber-400"></div>
+                                              <span className="text-[12px] font-bold text-slate-600">{date}</span>
+                                            </div>
+                                            <span className="text-[13px] font-black text-amber-600">+{formatNumberWithDots(qty)} vé</span>
+                                          </div>
+                                        ))}
+                                      </div>
+                                    </div>
+                                  )}
+                                </>
+                              )}
+                              {isAdmin && isAdminView && (
+                                <button onClick={() => setShowReportPreview(true)} className="w-full mt-6 py-3.5 bg-slate-100 text-slate-700 rounded-2xl font-bold flex items-center justify-center gap-2 border border-slate-200 hover:bg-slate-200 active:scale-95 transition-all">
+                                  <Eye size={16} strokeWidth={2.5} /> Xem Trước Báo Cáo
+                                </button>
+                              )}
+                            </>
+                          )}
+                        </div>
+                      );
+                    })()
+                  ) : (() => {
+                    let displayList = [];
+                    if (activeFundTab === 'transactions') {
+                      const regular = currentTransactions.filter(t => t.type !== 'ticket_receive' && !(t.type === 'income' && t.category === 'Bán vé' && t.teamName));
+                      const teamTickets = currentTransactions.filter(t => t.type === 'income' && t.category === 'Bán vé' && t.teamName);
+                      displayList = [...regular];
+                      if (teamTickets.length > 0) {
+                        const totalQty = teamTickets.reduce((sum, t) => sum + Number(t.ticketQuantity || 0), 0);
+                        const totalAmt = teamTickets.reduce((sum, t) => sum + Number(t.amount || 0), 0);
+                        displayList.unshift({
+                          id: 'virtual_team_tickets',
+                          type: 'income',
+                          category: 'Bán vé',
+                          note: 'Thi Đua',
+                          amount: totalAmt,
+                          ticketQuantity: totalQty,
+                          date: '',
+                          isVirtual: true
+                        });
+                      }
+                    } else {
+                      displayList = currentDonations;
+                    }
+                    if (displayList.length === 0) return <div className="text-center py-10 text-slate-400 bg-white rounded-[1.5rem] border border-slate-200"><p className="text-sm font-medium">Chưa có dữ liệu.</p></div>;
+                    return displayList.map(item => (
                       <div key={item.id} className="bg-white p-4 rounded-[1.5rem] flex items-center gap-4 shadow-[0_2px_10px_-4px_rgba(0,0,0,0.03)] border border-slate-100/50">
                         <div className={`shrink-0 w-14 h-14 rounded-[1.2rem] flex items-center justify-center shadow-sm ${activeFundTab === 'donations' ? 'bg-amber-50 text-amber-600' : item.type === 'income' ? 'bg-emerald-50 text-emerald-600' : 'bg-rose-50 text-rose-600'}`}>
                           {activeFundTab === 'donations' ? <Heart size={24} strokeWidth={2.5} /> : item.type === 'income' ? <ArrowUpRight size={24} strokeWidth={2.5} /> : <ArrowDownLeft size={24} strokeWidth={2.5} />}
@@ -692,13 +809,18 @@ export default function App() {
                         <div className="flex-1 min-w-0">
                           <p className="font-bold text-[14px] truncate text-slate-900">{activeFundTab === 'donations' ? item.donorName : item.note}</p>
                           {activeFundTab === 'donations' && item.note && <p className="text-[11px] text-slate-500 mt-0.5 truncate pr-2 font-medium">"{item.note}"</p>}
-                          <p className="text-[10px] text-slate-400 font-black mt-1.5 uppercase tracking-widest">{item.date}</p>
+                          <div className="flex items-center gap-2 mt-1.5">
+                            {activeFundTab !== 'donations' && item.category && (
+                              <span className="px-2 py-0.5 bg-slate-100 text-slate-500 rounded-md text-[9px] font-black uppercase tracking-wider flex items-center gap-1 shrink-0"><Tag size={10} /> {item.category} {item.ticketQuantity ? `(${item.ticketQuantity} vé${item.ticketPrice ? ` x ${formatNumberWithDots(item.ticketPrice)}đ` : ''})` : ''}</span>
+                            )}
+                            <p className="text-[10px] text-slate-400 font-black uppercase tracking-widest">{item.date}</p>
+                          </div>
                         </div>
                         <div className="text-right flex flex-col items-end gap-2">
                           <p className={`font-black text-[15px] tracking-tight ${activeFundTab === 'donations' ? 'text-amber-600' : item.type === 'income' ? 'text-emerald-600' : 'text-slate-900'}`}>
                             {activeFundTab === 'donations' || item.type === 'income' ? '+' : '-'}{formatCurrency(item.amount)}
                           </p>
-                          {isAdmin && isAdminView && (
+                          {isAdmin && isAdminView && !item.isVirtual && (
                             <div className="flex items-center gap-1.5">
                               <button onClick={() => openEditDataModal(item, 'fund', activeFundTab === 'donations' ? 'donation' : item.type)} className="text-slate-400 hover:text-emerald-500 p-1.5 bg-slate-50 rounded-lg"><Edit2 size={13} /></button>
                               <button onClick={() => handleDeleteData(item.id, activeFundTab === 'donations' ? 'donation' : 'transaction')} className="text-slate-400 hover:text-rose-500 p-1.5 bg-slate-50 rounded-lg"><Trash2 size={13} /></button>
@@ -706,16 +828,111 @@ export default function App() {
                           )}
                         </div>
                       </div>
-                    ))
-                  )}
+                    ));
+                  })()}
                 </div>
+              </div>
+            )}
+
+            {/* --- TAB THI ĐUA (CHỈ DÀNH CHO XỔ SỐ) --- */}
+            {activeMainTab === 'competition' && activeTournament?.category === 'Xổ số' && (
+              <div className="animate-in fade-in slide-in-from-bottom-4 duration-300 px-5 pt-5 pb-8">
+                <div className="flex items-center gap-3 mb-6 bg-amber-50 p-4 rounded-2xl border border-amber-100/50 shadow-sm">
+                  <div className="w-12 h-12 bg-amber-100 text-amber-600 flex items-center justify-center rounded-xl shadow-inner shrink-0">
+                    <Trophy size={28} strokeWidth={2.5} />
+                  </div>
+                  <div>
+                    <h2 className="text-[15px] font-black tracking-tight text-amber-900 uppercase">Bảng Xếp Hạng</h2>
+                    <p className="text-[11px] font-bold text-amber-700/70 mt-0.5">Các đội bán vé xuất sắc nhất</p>
+                  </div>
+                </div>
+
+                {teamLeaderboard.length === 0 ? (
+                  <div className="text-center py-10 text-slate-400 bg-white rounded-[1.5rem] border border-slate-200">
+                    <p className="text-sm font-medium">Chưa có dữ liệu thi đua.</p>
+                  </div>
+                ) : (
+                  <div className="flex flex-col gap-4">
+                    {teamLeaderboard.map((team, index) => {
+                      let rankContent = index + 1;
+                      let rankColor = 'bg-slate-100 text-slate-400 border-2 border-transparent';
+                      let cardStyle = 'border-slate-100 shadow-sm bg-white';
+                      let rankContainerStyle = 'w-11 h-11 text-[15px] font-black shrink-0 self-start mt-0.5 z-10';
+                      
+                      if (index === 0) {
+                        rankContent = <Trophy size={28} strokeWidth={2.5} className="drop-shadow-lg text-yellow-50" />;
+                        rankColor = 'bg-gradient-to-br from-yellow-300 via-amber-400 to-amber-600 text-white shadow-[0_0_25px_rgba(251,191,36,0.8)] border-2 border-yellow-200 ring-4 ring-yellow-400/30';
+                        cardStyle = 'border-amber-400 shadow-[0_12px_30px_-5px_rgba(251,191,36,0.6)] bg-gradient-to-br from-amber-50 via-yellow-100/90 to-amber-50 scale-[1.04] relative overflow-hidden z-30';
+                        rankContainerStyle = 'w-14 h-14 shrink-0 self-start z-10';
+                      } else if (index === 1) {
+                        rankContent = <Medal size={24} strokeWidth={2.5} className="drop-shadow-lg text-slate-50" />;
+                        rankColor = 'bg-gradient-to-br from-slate-200 via-slate-400 to-slate-600 text-white shadow-[0_0_20px_rgba(148,163,184,0.6)] border-2 border-slate-100 ring-4 ring-slate-400/30';
+                        cardStyle = 'border-slate-400 shadow-[0_10px_25px_-5px_rgba(148,163,184,0.5)] bg-gradient-to-br from-slate-50 via-gray-200/80 to-slate-50 scale-[1.02] relative overflow-hidden z-20';
+                        rankContainerStyle = 'w-12 h-12 shrink-0 self-start z-10 mt-0.5';
+                      } else if (index === 2) {
+                        rankContent = <Medal size={24} strokeWidth={2.5} className="drop-shadow-lg text-orange-50" />;
+                        rankColor = 'bg-gradient-to-br from-orange-300 via-orange-500 to-red-500 text-white shadow-[0_0_20px_rgba(249,115,22,0.6)] border-2 border-orange-200 ring-4 ring-orange-500/30';
+                        cardStyle = 'border-orange-400 shadow-[0_10px_25px_-5px_rgba(249,115,22,0.5)] bg-gradient-to-br from-orange-50 via-orange-200/80 to-orange-50 scale-[1.01] relative overflow-hidden z-10';
+                        rankContainerStyle = 'w-12 h-12 shrink-0 self-start z-10 mt-0.5';
+                      }
+                      
+                      return (
+                        <div key={team.name} className={`rounded-2xl p-4 flex items-center gap-4 border transition-all duration-300 ${cardStyle}`}>
+                          {index === 0 && <div className="absolute -right-10 -top-10 w-40 h-40 bg-yellow-400/30 rounded-full blur-3xl pointer-events-none"></div>}
+                          {index === 1 && <div className="absolute -right-10 -top-10 w-40 h-40 bg-slate-400/20 rounded-full blur-3xl pointer-events-none"></div>}
+                          {index === 2 && <div className="absolute -right-10 -top-10 w-40 h-40 bg-orange-500/20 rounded-full blur-3xl pointer-events-none"></div>}
+                          <div className={`rounded-full flex items-center justify-center ${rankContainerStyle} ${rankColor}`}>{rankContent}</div>
+                          <div className="flex-1 min-w-0 z-10">
+                            <div className="flex justify-between items-start mb-2">
+                              <div>
+                                <p className="font-bold text-[15px] text-slate-900 truncate">{team.name}</p>
+                                {team.members && <p className="text-[10px] font-medium text-slate-500 mt-0.5 line-clamp-1">{team.members}</p>}
+                              </div>
+                              <div className="flex items-center gap-1.5 mt-0.5 shrink-0">
+                                <button onClick={() => setSelectedTeamDetailName(team.name)} className="p-1.5 rounded-lg border border-slate-100 bg-slate-50 text-slate-400 hover:text-slate-600 transition-colors">
+                                  <List size={13} strokeWidth={3} />
+                                </button>
+                                {isAdmin && isAdminView && team.id && (
+                                  <>
+                                    <button onClick={() => openEditDataModal(team, 'team', 'team')} className="text-slate-400 hover:text-emerald-500 p-1.5 bg-slate-50 border border-slate-100 rounded-lg"><Edit2 size={13} /></button>
+                                    <button onClick={() => handleDeleteData(team.id, 'team')} className="text-slate-400 hover:text-rose-500 p-1.5 bg-slate-50 border border-slate-100 rounded-lg"><Trash2 size={13} /></button>
+                                  </>
+                                )}
+                              </div>
+                            </div>
+                            <div className="bg-slate-50 rounded-xl p-3 border border-slate-100 mb-2">
+                              <div className="flex justify-between text-[11px] font-black text-slate-500 mb-1.5">
+                                <span>ĐÃ BÁN: <span className="text-emerald-600">{formatNumberWithDots(team.tickets)}</span> / {formatNumberWithDots(team.ticketQuota)} vé</span>
+                                <span className="text-amber-600">{team.ticketQuota > 0 ? Math.round((team.tickets / team.ticketQuota) * 100) : 0}%</span>
+                              </div>
+                              <div className="w-full bg-slate-200 rounded-full h-1.5 overflow-hidden">
+                                <div className="bg-emerald-500 h-full rounded-full transition-all duration-700" style={{ width: `${team.ticketQuota > 0 ? Math.min(100, (team.tickets / team.ticketQuota) * 100) : 0}%` }}></div>
+                              </div>
+                            </div>
+                            <div className="flex justify-between items-center px-1">
+                              <span className="text-slate-400 uppercase tracking-wider text-[10px] font-bold">Doanh thu</span>
+                              <span className="text-emerald-600 font-black text-[13px]">{formatCurrency(team.revenue)}</span>
+                            </div>
+                            
+
+                            {isAdmin && isAdminView && (
+                              <button onClick={() => openQuickAddTicket(team.name)} className="w-full mt-3 py-2.5 bg-emerald-50 text-emerald-600 rounded-xl font-bold flex items-center justify-center gap-1.5 border border-emerald-100 hover:bg-emerald-100 active:scale-95 transition-all text-[11px] uppercase tracking-wider">
+                                <Plus size={14} strokeWidth={3} /> Cập nhật vé bán
+                              </button>
+                            )}
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
               </div>
             )}
 
             {/* --- TAB 3: KỈ NIỆM --- */}
             {activeMainTab === 'gallery' && (
               <div className="animate-in fade-in slide-in-from-bottom-4 duration-300 px-5 pt-5 pb-8">
-                <h2 className="text-xs font-black text-slate-400 mb-4 px-1 uppercase tracking-widest">Thư viện hình ảnh</h2>
+                <h2 className="text-xs font-black text-slate-400 mb-4 px-1 uppercase tracking-widest">Thư viện & Chứng từ</h2>
                 {currentPhotos.length === 0 ? (
                   <div className="text-center py-10 text-slate-400 bg-white rounded-[1.5rem] border border-slate-200"><p className="text-sm font-medium">Chưa có hình ảnh nào.</p></div>
                 ) : (
@@ -747,16 +964,16 @@ export default function App() {
                 resetFormData(); 
                 setEditingData(null); 
                 
-                let targetModalType = activeMainTab;
-                if (activeMainTab === 'info') {
-                  targetModalType = activeInfoTab === 'standings' ? 'team' : 'match';
+                if (activeMainTab === 'gallery') {
+                  setModalType('gallery');
+                  setFormData(prev => ({...prev, type: 'gallery'}));
+                } else if (activeMainTab === 'competition') {
+                  setModalType('team');
+                  setFormData(prev => ({...prev, type: 'team'}));
+                } else {
+                  setModalType('fund');
+                  setFormData(prev => ({...prev, type: activeFundTab === 'donations' ? 'donation' : 'income'}));
                 }
-                setModalType(targetModalType);
-
-                if (targetModalType === 'match') setFormData(prev => ({...prev, type: 'match'}));
-                else if (targetModalType === 'team') setFormData(prev => ({...prev, type: 'team'}));
-                else if (targetModalType === 'gallery') setFormData(prev => ({...prev, type: 'gallery'}));
-                else setFormData(prev => ({...prev, type: activeFundTab === 'transactions' ? 'income' : 'donation'}));
                 
                 setShowAddModal(true);
               }} className="fixed bottom-24 right-6 w-14 h-14 bg-emerald-500 text-white rounded-full shadow-[0_10px_25px_-5px_rgba(16,185,129,0.5)] flex items-center justify-center z-30 active:scale-95 transition-transform border-4 border-white">
@@ -769,17 +986,19 @@ export default function App() {
         {/* --- BOTTOM NAVIGATION BAR --- */}
         {currentScreen === 'detail' && (
           <div className="absolute bottom-0 left-0 right-0 bg-white border-t border-slate-100 flex justify-around items-center px-4 pb-6 pt-3 z-40 rounded-b-[2.5rem]">
-            <button onClick={() => setActiveMainTab('info')} className={`flex flex-col items-center gap-1.5 w-20 transition-colors ${activeMainTab === 'info' ? 'text-slate-900' : 'text-slate-400 hover:text-slate-600'}`}>
-              <div className={`p-1.5 rounded-[1rem] ${activeMainTab === 'info' ? 'bg-slate-100' : ''}`}><Swords size={22} strokeWidth={activeMainTab === 'info' ? 2.5 : 2} /></div>
-              <span className={`text-[10px] font-black uppercase tracking-widest ${activeMainTab === 'info' ? 'opacity-100' : 'opacity-0'}`}>Thông tin</span>
-            </button>
             <button onClick={() => setActiveMainTab('fund')} className={`flex flex-col items-center gap-1.5 w-20 transition-colors ${activeMainTab === 'fund' ? 'text-slate-900' : 'text-slate-400 hover:text-slate-600'}`}>
               <div className={`p-1.5 rounded-[1rem] ${activeMainTab === 'fund' ? 'bg-slate-100' : ''}`}><Wallet size={22} strokeWidth={activeMainTab === 'fund' ? 2.5 : 2} /></div>
               <span className={`text-[10px] font-black uppercase tracking-widest ${activeMainTab === 'fund' ? 'opacity-100' : 'opacity-0'}`}>Thu Chi</span>
             </button>
+            {activeTournament?.category === 'Xổ số' && (
+              <button onClick={() => setActiveMainTab('competition')} className={`flex flex-col items-center gap-1.5 w-20 transition-colors ${activeMainTab === 'competition' ? 'text-slate-900' : 'text-slate-400 hover:text-slate-600'}`}>
+                <div className={`p-1.5 rounded-[1rem] ${activeMainTab === 'competition' ? 'bg-slate-100' : ''}`}><Trophy size={22} strokeWidth={activeMainTab === 'competition' ? 2.5 : 2} /></div>
+                <span className={`text-[10px] font-black uppercase tracking-widest ${activeMainTab === 'competition' ? 'opacity-100' : 'opacity-0'}`}>Thi Đua</span>
+              </button>
+            )}
             <button onClick={() => setActiveMainTab('gallery')} className={`flex flex-col items-center gap-1.5 w-20 transition-colors ${activeMainTab === 'gallery' ? 'text-slate-900' : 'text-slate-400 hover:text-slate-600'}`}>
-              <div className={`p-1.5 rounded-[1rem] ${activeMainTab === 'gallery' ? 'bg-slate-100' : ''}`}><ImageIcon size={22} strokeWidth={activeMainTab === 'gallery' ? 2.5 : 2} /></div>
-              <span className={`text-[10px] font-black uppercase tracking-widest ${activeMainTab === 'gallery' ? 'opacity-100' : 'opacity-0'}`}>Kỉ Niệm</span>
+              <div className={`p-1.5 rounded-[1rem] ${activeMainTab === 'gallery' ? 'bg-slate-100' : ''}`}><Receipt size={22} strokeWidth={activeMainTab === 'gallery' ? 2.5 : 2} /></div>
+              <span className={`text-[10px] font-black uppercase tracking-widest ${activeMainTab === 'gallery' ? 'opacity-100' : 'opacity-0'}`}>Chứng Từ</span>
             </button>
           </div>
         )}
@@ -793,7 +1012,7 @@ export default function App() {
               <div className="w-12 h-1.5 bg-slate-200 rounded-full mx-auto mb-6 shrink-0"></div>
               <div className="flex justify-between items-center mb-6 px-1">
                 <h2 className="text-[17px] font-black tracking-tight text-slate-900 uppercase">
-                  {editingData && editingData.id ? 'Cập Nhật' : 'Thêm Mới'} {modalType === 'fund' ? (formData.type === 'donation' ? 'Ủng Hộ' : 'Giao Dịch') : modalType === 'match' ? 'Trận Đấu' : modalType === 'team' ? 'Đội Bóng' : 'Hình Ảnh'}
+                  {editingData && editingData.id ? 'Cập Nhật' : 'Thêm Mới'} {modalType === 'fund' ? (formData.type === 'donation' ? 'Ủng Hộ' : 'Giao Dịch') : modalType === 'team' ? 'Đội Bán Vé' : modalType === 'quick_ticket' ? 'Vé Bán' : 'Chứng Từ'}
                 </h2>
                 <button onClick={() => { setShowAddModal(false); setEditingData(null); resetFormData(); }} className="bg-slate-100 p-2 rounded-full text-slate-500 hover:bg-slate-200"><X size={18} strokeWidth={2.5} /></button>
               </div>
@@ -804,14 +1023,77 @@ export default function App() {
                   <>
                     <div className="flex bg-slate-100/80 p-1.5 rounded-xl mb-4 relative">
                       {editingData && <div className="absolute inset-0 z-10 cursor-not-allowed"></div>}
-                      <button type="button" onClick={() => !editingData && setFormData({...formData, type: 'income'})} className={`flex-1 py-2.5 rounded-lg font-bold text-[13px] transition-all ${formData.type === 'income' ? 'bg-white text-emerald-600 shadow-sm' : 'text-slate-500'} ${editingData ? 'opacity-50' : ''}`}>Thu</button>
-                      <button type="button" onClick={() => !editingData && setFormData({...formData, type: 'expense'})} className={`flex-1 py-2.5 rounded-lg font-bold text-[13px] transition-all ${formData.type === 'expense' ? 'bg-white text-rose-600 shadow-sm' : 'text-slate-500'} ${editingData ? 'opacity-50' : ''}`}>Chi</button>
+                      <button type="button" onClick={() => !editingData && setFormData({...formData, type: 'income', category: 'Tài trợ'})} className={`flex-1 py-2.5 rounded-lg font-bold text-[13px] transition-all ${formData.type === 'income' ? 'bg-white text-emerald-600 shadow-sm' : 'text-slate-500'} ${editingData ? 'opacity-50' : ''}`}>Thu</button>
+                      <button type="button" onClick={() => !editingData && setFormData({...formData, type: 'expense', category: 'Trang trí'})} className={`flex-1 py-2.5 rounded-lg font-bold text-[13px] transition-all ${formData.type === 'expense' ? 'bg-white text-rose-600 shadow-sm' : 'text-slate-500'} ${editingData ? 'opacity-50' : ''}`}>Chi</button>
                       <button type="button" onClick={() => !editingData && setFormData({...formData, type: 'donation'})} className={`flex-1 py-2.5 rounded-lg font-bold text-[13px] transition-all ${formData.type === 'donation' ? 'bg-white text-amber-600 shadow-sm' : 'text-slate-500'} ${editingData ? 'opacity-50' : ''}`}>Ủng Hộ</button>
                     </div>
+                    {formData.type !== 'donation' && (
+                      <div className="space-y-1.5">
+                        <label className="text-[11px] font-black text-slate-400 ml-1 uppercase tracking-wider">Danh Mục {formData.type === 'income' ? 'Thu' : 'Chi'}</label>
+                        <select className="w-full bg-slate-50 border border-slate-200 rounded-[1.2rem] p-3.5 text-[15px] font-bold focus:border-slate-900 focus:outline-none appearance-none" value={formData.category} onChange={(e) => {
+                          const newCat = e.target.value;
+                          const updatedForm = { ...formData, category: newCat };
+                          if (formData.type === 'income' && newCat === 'Bán vé' && activeTournament?.category === 'Xổ số') {
+                            updatedForm.ticketPrice = activeTournament?.ticketPrice ? formatNumberWithDots(activeTournament.ticketPrice) : '';
+                          }
+                          setFormData(updatedForm);
+                        }}>
+                          {formData.type === 'income' ? (
+                            <>
+                              <option value="Tài trợ">Tài trợ / Ân nhân</option>
+                              <option value="Bán vé">Bán vé / Gian hàng</option>
+                              <option value="Khác">Khác</option>
+                            </>
+                          ) : (
+                            <>
+                              <option value="Trang trí">Trang trí</option>
+                              <option value="Âm thanh/Ánh sáng">Âm thanh / Ánh sáng</option>
+                              <option value="Ẩm thực">Ẩm thực / Ăn uống</option>
+                              <option value="Hậu cần">Hậu cần / Di chuyển</option>
+                              <option value="Quà tặng">Phần thưởng / Quà tặng</option>
+                              <option value="Khác">Khác</option>
+                            </>
+                          )}
+                        </select>
+                      </div>
+                    )}
                     <div className="space-y-1.5">
                       <label className="text-[11px] font-black text-slate-400 ml-1 uppercase tracking-wider">{formData.type === 'donation' ? 'Tên Người Ủng Hộ' : 'Nội Dung'}</label>
                       <input type="text" required placeholder="..." className="w-full bg-slate-50 border border-slate-200 rounded-[1.2rem] p-3.5 text-[15px] font-bold focus:border-slate-900 focus:outline-none" value={formData.type === 'donation' ? formData.donorName : formData.note} onChange={(e) => formData.type === 'donation' ? setFormData({...formData, donorName: e.target.value}) : setFormData({...formData, note: e.target.value})} />
                     </div>
+                    {formData.type === 'income' && formData.category === 'Bán vé' && activeTournament?.category === 'Xổ số' && (
+                      <div className="space-y-4 bg-amber-50/50 p-4 rounded-2xl border border-amber-100/50">
+                        <div className="grid grid-cols-2 gap-3">
+                          <div className="space-y-1.5">
+                            <label className="text-[11px] font-black text-slate-400 ml-1 uppercase tracking-wider">Số lượng vé</label>
+                            <input type="number" min="0" placeholder="VD: 50" className="w-full bg-white border border-slate-200 rounded-[1.2rem] p-3.5 text-[15px] font-bold focus:border-amber-400 focus:outline-none text-emerald-600" value={formData.ticketQuantity} onChange={(e) => {
+                              const val = e.target.value;
+                              const qty = Number(val) || 0;
+                              const price = parseFormattedNumber(formData.ticketPrice) || 0;
+                              setFormData({...formData, ticketQuantity: val, amount: (qty > 0 && price > 0) ? formatNumberWithDots(qty * price) : formData.amount});
+                            }} />
+                          </div>
+                          <div className="space-y-1.5">
+                            <label className="text-[11px] font-black text-slate-400 ml-1 uppercase tracking-wider">Giá 1 vé</label>
+                            <input type="text" placeholder="VD: 10.000" className="w-full bg-white border border-slate-200 rounded-[1.2rem] p-3.5 text-[15px] font-bold focus:border-amber-400 focus:outline-none text-emerald-600" value={formData.ticketPrice} onChange={(e) => {
+                              const val = formatNumberWithDots(e.target.value);
+                              const price = parseFormattedNumber(val) || 0;
+                              const qty = Number(formData.ticketQuantity) || 0;
+                              setFormData({...formData, ticketPrice: val, amount: (qty > 0 && price > 0) ? formatNumberWithDots(qty * price) : formData.amount});
+                            }} />
+                          </div>
+                        </div>
+                        <div className="space-y-1.5">
+                          <label className="text-[11px] font-black text-slate-400 ml-1 uppercase tracking-wider flex items-center gap-1"><Trophy size={11} className="text-amber-500" /> Đội / Nhóm bán vé</label>
+                          <select className="w-full bg-white border border-slate-200 rounded-[1.2rem] p-3.5 text-[15px] font-bold focus:border-amber-400 focus:outline-none appearance-none" value={formData.teamName} onChange={(e) => setFormData({...formData, teamName: e.target.value})}>
+                            <option value="">-- Không chọn --</option>
+                            {currentTeams.map(t => (
+                              <option key={t.id} value={t.name}>{t.name}</option>
+                            ))}
+                          </select>
+                        </div>
+                      </div>
+                    )}
                     <div className="grid grid-cols-2 gap-3">
                       <div className="space-y-1.5">
                         <label className="text-[11px] font-black text-slate-400 ml-1 uppercase tracking-wider">Số Tiền (VNĐ)</label>
@@ -828,6 +1110,52 @@ export default function App() {
                         <input type="text" placeholder="..." className="w-full bg-slate-50 border border-slate-200 rounded-[1.2rem] p-3.5 text-[15px] font-bold focus:border-slate-900 focus:outline-none" value={formData.note} onChange={(e) => setFormData({...formData, note: e.target.value})} />
                       </div>
                     )}
+                  </>
+                )}
+
+                {/* Form NHẬP VÉ NHANH */}
+                {modalType === 'quick_ticket' && (
+                  <>
+                    <div className="bg-emerald-50 text-emerald-700 p-3.5 rounded-[1.2rem] mb-4 font-black text-center border border-emerald-100 flex items-center justify-center gap-2 uppercase tracking-wider text-[13px]">
+                      <Trophy size={18} strokeWidth={2.5} /> ĐỘI: {formData.teamName}
+                    </div>
+                    <div className="space-y-1.5">
+                      <label className="text-[11px] font-black text-slate-400 ml-1 uppercase tracking-wider">Số lượng vé bán được</label>
+                      <input type="number" min="0" required placeholder="VD: 50" className="w-full bg-slate-50 border border-slate-200 rounded-[1.2rem] p-3.5 text-[15px] font-black focus:border-emerald-500 focus:outline-none text-emerald-600" value={formData.ticketQuantity} onChange={(e) => {
+                        const val = e.target.value;
+                        const qty = Number(val) || 0;
+                            const price = parseFormattedNumber(formData.ticketPrice) || 0;
+                        setFormData({...formData, ticketQuantity: val, amount: (qty > 0 && price > 0) ? formatNumberWithDots(qty * price) : formData.amount});
+                      }} />
+                    </div>
+                    <div className="grid grid-cols-2 gap-3">
+                      <div className="space-y-1.5">
+                        <label className="text-[11px] font-black text-slate-400 ml-1 uppercase tracking-wider">Số Tiền (VNĐ)</label>
+                        <input type="text" required placeholder="0" className="w-full bg-slate-50 border border-slate-200 rounded-[1.2rem] p-3.5 text-[15px] font-black focus:border-slate-900 focus:outline-none text-emerald-600" value={formData.amount} onChange={(e) => setFormData({...formData, amount: formatNumberWithDots(e.target.value)})} />
+                      </div>
+                      <div className="space-y-1.5">
+                        <label className="text-[11px] font-black text-slate-400 ml-1 uppercase tracking-wider">Ngày</label>
+                        <input type="date" required className="w-full bg-slate-50 border border-slate-200 rounded-[1.2rem] p-3.5 text-[15px] font-bold focus:border-slate-900 focus:outline-none" value={formData.date} onChange={(e) => setFormData({...formData, date: e.target.value})} />
+                      </div>
+                    </div>
+                  </>
+                )}
+
+                {/* 3. Form ĐỘI THI ĐUA */}
+                {modalType === 'team' && (
+                  <>
+                    <div className="space-y-1.5">
+                      <label className="text-[11px] font-black text-slate-400 ml-1 uppercase tracking-wider">Tên Đội / Nhóm</label>
+                      <input type="text" required placeholder="VD: Ca Đoàn, Giới Trẻ..." className="w-full bg-slate-50 border border-slate-200 rounded-[1.2rem] p-3.5 text-[15px] font-black focus:border-slate-900 focus:outline-none" value={formData.teamName} onChange={(e) => setFormData({...formData, teamName: e.target.value})} />
+                    </div>
+                    <div className="space-y-1.5">
+                      <label className="text-[11px] font-black text-slate-400 ml-1 uppercase tracking-wider">Danh sách thành viên (Tùy chọn)</label>
+                      <textarea placeholder="VD: A.Tuấn, C.Mai, E.Hùng..." rows="3" className="w-full bg-slate-50 border border-slate-200 rounded-[1.2rem] p-3.5 text-[15px] font-medium focus:border-slate-900 focus:outline-none resize-none leading-relaxed" value={formData.teamMembers} onChange={(e) => setFormData({...formData, teamMembers: e.target.value})}></textarea>
+                    </div>
+                    <div className="space-y-1.5">
+                      <label className="text-[11px] font-black text-slate-400 ml-1 uppercase tracking-wider">Tổng số vé nhận (Chỉ tiêu)</label>
+                      <input type="number" required min="0" placeholder="VD: 500" className="w-full bg-slate-50 border border-slate-200 rounded-[1.2rem] p-3.5 text-[15px] font-black focus:border-slate-900 focus:outline-none" value={formData.teamTicketQuota} onChange={(e) => setFormData({...formData, teamTicketQuota: e.target.value})} />
+                    </div>
                   </>
                 )}
 
@@ -854,78 +1182,6 @@ export default function App() {
                   </>
                 )}
 
-                {/* 3. Form TRẬN ĐẤU */}
-                {modalType === 'match' && (
-                  <>
-                    <div className="space-y-1.5">
-                      <label className="text-[11px] font-black text-slate-400 ml-1 uppercase tracking-wider">Bảng đấu / Vòng đấu</label>
-                      <input type="text" required placeholder="VD: Bảng A, Bán kết..." className="w-full bg-slate-50 border border-slate-200 rounded-[1.2rem] p-3.5 text-[15px] font-black focus:border-slate-900 focus:outline-none uppercase" value={formData.group} onChange={(e) => setFormData({...formData, group: e.target.value})} />
-                    </div>
-                    <div className="grid grid-cols-2 gap-3">
-                      <div className="space-y-1.5">
-                        <label className="text-[11px] font-black text-slate-400 ml-1 uppercase tracking-wider">Đội 1 (Chủ nhà)</label>
-                        <input type="text" required placeholder="Tên đội..." className="w-full bg-slate-50 border border-slate-200 rounded-[1.2rem] p-3.5 text-[15px] font-black focus:border-slate-900 focus:outline-none" value={formData.homeTeam} onChange={(e) => setFormData({...formData, homeTeam: e.target.value})} />
-                      </div>
-                      <div className="space-y-1.5">
-                        <label className="text-[11px] font-black text-slate-400 ml-1 uppercase tracking-wider">Đội 2 (Khách)</label>
-                        <input type="text" required placeholder="Tên đội..." className="w-full bg-slate-50 border border-slate-200 rounded-[1.2rem] p-3.5 text-[15px] font-black focus:border-slate-900 focus:outline-none" value={formData.awayTeam} onChange={(e) => setFormData({...formData, awayTeam: e.target.value})} />
-                      </div>
-                    </div>
-                    <div className="grid grid-cols-2 gap-3">
-                      <div className="space-y-1.5">
-                        <label className="text-[11px] font-black text-slate-400 ml-1 uppercase tracking-wider">Ngày đá</label>
-                        <input type="date" required className="w-full bg-slate-50 border border-slate-200 rounded-[1.2rem] p-3.5 text-[15px] font-bold focus:border-slate-900 focus:outline-none" value={formData.date} onChange={(e) => setFormData({...formData, date: e.target.value})} />
-                      </div>
-                      <div className="space-y-1.5">
-                        <label className="text-[11px] font-black text-slate-400 ml-1 uppercase tracking-wider">Giờ đá</label>
-                        <input type="time" required className="w-full bg-slate-50 border border-slate-200 rounded-[1.2rem] p-3.5 text-[15px] font-bold focus:border-slate-900 focus:outline-none" value={formData.matchTime} onChange={(e) => setFormData({...formData, matchTime: e.target.value})} />
-                      </div>
-                    </div>
-                    <div className="space-y-1.5">
-                      <label className="text-[11px] font-black text-slate-400 ml-1 uppercase tracking-wider">Sân thi đấu</label>
-                      <input type="text" required placeholder="Tên sân..." className="w-full bg-slate-50 border border-slate-200 rounded-[1.2rem] p-3.5 text-[15px] font-bold focus:border-slate-900 focus:outline-none" value={formData.location} onChange={(e) => setFormData({...formData, location: e.target.value})} />
-                    </div>
-
-                    <div className="mt-4 pt-4 border-t border-slate-100">
-                      <label className="flex items-center gap-2 cursor-pointer mb-4">
-                        <input type="checkbox" className="w-5 h-5 rounded border-slate-300 text-emerald-500 focus:ring-emerald-500" checked={formData.isCompleted} onChange={(e) => setFormData({...formData, isCompleted: e.target.checked})} />
-                        <span className="font-bold text-slate-700">Trận đấu đã kết thúc (Nhập tỉ số)</span>
-                      </label>
-
-                      {formData.isCompleted && (
-                        <div className="flex items-center gap-4 bg-slate-50 p-4 rounded-2xl border border-slate-200">
-                          <div className="flex-1 text-center">
-                            <label className="text-[10px] font-black text-slate-400 block mb-2 uppercase truncate">{formData.homeTeam || 'ĐỘI 1'}</label>
-                            <input type="number" required={formData.isCompleted} placeholder="0" className="w-full bg-white border border-slate-200 rounded-[1.2rem] p-3 text-3xl text-center font-black focus:border-slate-900 focus:outline-none" value={formData.homeScore} onChange={(e) => setFormData({...formData, homeScore: e.target.value})} />
-                          </div>
-                          <div className="font-black text-slate-300 text-2xl pt-4">-</div>
-                          <div className="flex-1 text-center">
-                            <label className="text-[10px] font-black text-slate-400 block mb-2 uppercase truncate">{formData.awayTeam || 'ĐỘI 2'}</label>
-                            <input type="number" required={formData.isCompleted} placeholder="0" className="w-full bg-white border border-slate-200 rounded-[1.2rem] p-3 text-3xl text-center font-black focus:border-slate-900 focus:outline-none" value={formData.awayScore} onChange={(e) => setFormData({...formData, awayScore: e.target.value})} />
-                          </div>
-                        </div>
-                      )}
-                    </div>
-                  </>
-                )}
-
-                {/* 4. Form ĐỘI BÓNG (Dùng để định danh Bảng cho đội) */}
-                {modalType === 'team' && (
-                  <>
-                    <div className="space-y-1.5">
-                      <label className="text-[11px] font-black text-slate-400 ml-1 uppercase tracking-wider">Tên Đội Bóng</label>
-                      <input type="text" required placeholder="VD: Hoàng Yên FC..." className="w-full bg-slate-50 border border-slate-200 rounded-[1.2rem] p-3.5 text-[15px] font-black focus:border-slate-900 focus:outline-none" value={formData.teamName} onChange={(e) => setFormData({...formData, teamName: e.target.value})} />
-                    </div>
-                    <div className="space-y-1.5">
-                      <label className="text-[11px] font-black text-slate-400 ml-1 uppercase tracking-wider">Thuộc Bảng Đấu</label>
-                      <input type="text" required placeholder="VD: Bảng A, Bảng B..." className="w-full bg-slate-50 border border-slate-200 rounded-[1.2rem] p-3.5 text-[15px] font-black focus:border-slate-900 focus:outline-none uppercase" value={formData.teamGroup} onChange={(e) => setFormData({...formData, teamGroup: e.target.value})} />
-                    </div>
-                    <p className="text-[11px] font-medium text-slate-400 italic px-1 mt-2 leading-relaxed">
-                      * Mẹo: Việc chỉnh sửa bảng đấu tại đây sẽ tự động mang toàn bộ điểm số của đội chuyển sang bảng mới.
-                    </p>
-                  </>
-                )}
-
                 <button type="submit" className="w-full py-4 bg-slate-900 text-white rounded-2xl font-black shadow-lg active:scale-95 transition-transform mt-6 tracking-widest uppercase">
                   Lưu Thông Tin
                 </button>
@@ -940,16 +1196,38 @@ export default function App() {
             <div className="bg-white w-full rounded-t-[2rem] p-6 pt-3 shadow-2xl animate-in slide-in-from-bottom duration-300 pb-10">
               <div className="w-12 h-1.5 bg-slate-200 rounded-full mx-auto mb-6"></div>
               <div className="flex justify-between items-center mb-6 px-1">
-                <h2 className="text-[17px] font-black tracking-tight text-slate-900 uppercase">{editingTournament ? 'Cập Nhật Giải' : 'Tạo Giải Mới'}</h2>
+                <h2 className="text-[17px] font-black tracking-tight text-slate-900 uppercase">{editingTournament ? 'Cập Nhật Sự Kiện' : 'Tạo Sự Kiện Mới'}</h2>
                 <button onClick={() => setShowTournamentModal(false)} className="bg-slate-100 p-2 rounded-full text-slate-500 active:bg-slate-200 transition-colors"><X size={18} strokeWidth={2.5} /></button>
               </div>
               <form onSubmit={handleSaveTournament} className="space-y-4">
                 <div className="space-y-1.5">
-                  <label className="text-[11px] font-black text-slate-400 ml-1 uppercase tracking-wider">Tên Giải Đấu</label>
-                  <input type="text" required placeholder="VD: Giải mùa hè 2026..." className="w-full bg-slate-50 border border-slate-200 rounded-[1.2rem] p-3.5 text-[15px] font-bold focus:border-slate-900 focus:outline-none" value={newTournamentName} onChange={(e) => setNewTournamentName(e.target.value)} />
+                  <label className="text-[11px] font-black text-slate-400 ml-1 uppercase tracking-wider">Tên Sự Kiện</label>
+                  <input type="text" required placeholder="VD: Lễ Giáng Sinh 2026..." className="w-full bg-slate-50 border border-slate-200 rounded-[1.2rem] p-3.5 text-[15px] font-bold focus:border-slate-900 focus:outline-none" value={newTournamentName} onChange={(e) => setNewTournamentName(e.target.value)} />
+                </div>
+                {newTournamentCategory === 'Xổ số' && (
+                  <div className="grid grid-cols-2 gap-3">
+                    <div className="space-y-1.5">
+                      <label className="text-[11px] font-black text-slate-400 ml-1 uppercase tracking-wider">Giá vé (VNĐ)</label>
+                      <input type="text" placeholder="VD: 10.000" className="w-full bg-slate-50 border border-slate-200 rounded-[1.2rem] p-3.5 text-[15px] font-bold focus:border-slate-900 focus:outline-none text-emerald-600" value={newTournamentTicketPrice} onChange={(e) => setNewTournamentTicketPrice(formatNumberWithDots(e.target.value))} />
+                    </div>
+                    <div className="space-y-1.5">
+                      <label className="text-[11px] font-black text-slate-400 ml-1 uppercase tracking-wider">Mục tiêu (Vé)</label>
+                      <input type="text" placeholder="VD: 1.000" className="w-full bg-slate-50 border border-slate-200 rounded-[1.2rem] p-3.5 text-[15px] font-bold focus:border-slate-900 focus:outline-none text-emerald-600" value={newTournamentTicketTarget} onChange={(e) => setNewTournamentTicketTarget(formatNumberWithDots(e.target.value))} />
+                    </div>
+                  </div>
+                )}
+                <div className="space-y-1.5">
+                  <label className="text-[11px] font-black text-slate-400 ml-1 uppercase tracking-wider">Phân Loại Sự Kiện</label>
+                  <select className="w-full bg-slate-50 border border-slate-200 rounded-[1.2rem] p-3.5 text-[15px] font-bold focus:border-slate-900 focus:outline-none appearance-none" value={newTournamentCategory} onChange={(e) => setNewTournamentCategory(e.target.value)}>
+                    <option value="Quyên góp">Quyên góp / Gây quỹ</option>
+                    <option value="Thể thao">Thể thao / Bóng đá</option>
+                    <option value="Xổ số">Xổ số / Hội chợ</option>
+                    <option value="Xây dựng">Xây dựng / Tu bổ</option>
+                    <option value="Khác">Khác</option>
+                  </select>
                 </div>
                 <div className="space-y-1.5">
-                  <label className="text-[11px] font-black text-slate-400 ml-1 flex items-center gap-1 uppercase tracking-wider"><ImageIcon size={13} /> Ảnh bìa giải đấu</label>
+                  <label className="text-[11px] font-black text-slate-400 ml-1 flex items-center gap-1 uppercase tracking-wider"><ImageIcon size={13} /> Ảnh bìa sự kiện</label>
                   <div className="flex gap-2">
                     <input type="text" placeholder="https://... hoặc Ctrl+V để dán" className="flex-1 w-full bg-slate-50 border border-slate-200 rounded-[1.2rem] p-3.5 text-[15px] font-medium focus:border-slate-900 focus:outline-none" value={newTournamentImage} onChange={(e) => setNewTournamentImage(e.target.value)} onPaste={(e) => handlePasteImage(e, setNewTournamentImage)} />
                     <button type="button" onClick={() => fileInputRef.current?.click()} className="shrink-0 bg-slate-100 text-slate-600 px-4 rounded-[1.2rem] border border-slate-200 flex items-center justify-center active:bg-slate-200"><Upload size={18} strokeWidth={2.5} /></button>
@@ -957,9 +1235,17 @@ export default function App() {
                   </div>
                   {newTournamentImage && <div className="mt-3 h-40 rounded-2xl overflow-hidden border border-slate-200 bg-slate-100"><img src={newTournamentImage} alt="Preview" className="w-full h-full object-cover" onError={(e) => { e.target.src = defaultTournamentImg; }} /></div>}
                 </div>
+                <div className="space-y-1.5">
+                  <label className="text-[11px] font-black text-slate-400 ml-1 uppercase tracking-wider">Mục Tiêu Gây Quỹ (VNĐ)</label>
+                  <input type="text" placeholder="Tùy chọn (VD: 50.000.000)" className="w-full bg-slate-50 border border-slate-200 rounded-[1.2rem] p-3.5 text-[15px] font-bold focus:border-slate-900 focus:outline-none text-emerald-600" value={newTournamentTarget} onChange={(e) => setNewTournamentTarget(formatNumberWithDots(e.target.value))} />
+                </div>
+                <div className="space-y-1.5">
+                  <label className="text-[11px] font-black text-slate-400 ml-1 flex items-center gap-1 uppercase tracking-wider"><Lock size={13} /> Mật khẩu sự kiện</label>
+                  <input type="text" placeholder="Tùy chọn (Để trống nếu công khai)" className="w-full bg-slate-50 border border-slate-200 rounded-[1.2rem] p-3.5 text-[15px] font-bold focus:border-slate-900 focus:outline-none" value={newTournamentPassword} onChange={(e) => setNewTournamentPassword(e.target.value)} />
+                </div>
                 <div className="pt-4 flex gap-3">
                   {editingTournament && <button type="button" onClick={handleDeleteTournament} className="py-4 px-5 bg-rose-50 text-rose-600 rounded-2xl font-bold shadow-sm active:scale-95 transition-transform"><Trash2 size={20} /></button>}
-                  <button type="submit" className="flex-1 py-4 bg-slate-900 text-white rounded-2xl font-black tracking-widest shadow-lg active:scale-[0.98] transition-transform uppercase">{editingTournament ? 'Lưu Thay Đổi' : 'Tạo Giải Đấu'}</button>
+                  <button type="submit" className="flex-1 py-4 bg-slate-900 text-white rounded-2xl font-black tracking-widest shadow-lg active:scale-[0.98] transition-transform uppercase">{editingTournament ? 'Lưu Thay Đổi' : 'Tạo Sự Kiện'}</button>
                 </div>
               </form>
             </div>
@@ -984,6 +1270,117 @@ export default function App() {
                 </div>
                 <button type="submit" className="w-full py-4 bg-emerald-500 text-white rounded-2xl font-black shadow-lg active:scale-[0.98] transition-transform tracking-widest uppercase">Đăng Nhập</button>
               </form>
+            </div>
+          </div>
+        )}
+
+        {/* Modal Mật Khẩu Sự Kiện */}
+        {eventAuthModal.isOpen && (
+          <div className="absolute inset-0 bg-slate-900/60 backdrop-blur-md z-[120] flex items-center justify-center p-6">
+            <div className="bg-white w-full max-w-[320px] rounded-[2.5rem] p-8 shadow-2xl animate-in zoom-in-95 duration-200">
+              <div className="mx-auto w-16 h-16 bg-slate-100 rounded-full flex items-center justify-center mb-4 text-slate-700 shadow-inner">
+                <Lock size={28} strokeWidth={2.5} />
+              </div>
+              <h2 className="text-[17px] font-black tracking-tight text-slate-900 text-center uppercase mb-1">Sự Kiện Riêng Tư</h2>
+              <p className="text-center text-[12px] font-bold text-slate-500 mb-6 truncate px-2">{eventAuthModal.event?.name}</p>
+              
+              <form onSubmit={(e) => {
+                e.preventDefault();
+                if (eventAuthModal.password === eventAuthModal.event?.password) {
+                  setUnlockedEvents(prev => ({ ...prev, [eventAuthModal.event.id]: true }));
+                  goToDetail(eventAuthModal.event.id);
+                  setEventAuthModal({ isOpen: false, event: null, password: '', error: '' });
+                } else {
+                  setEventAuthModal(prev => ({ ...prev, error: 'Mật khẩu không chính xác!' }));
+                }
+              }} className="space-y-4">
+                <div className="space-y-1.5">
+                  <input type="password" required autoFocus placeholder="Nhập mật khẩu..." className={`w-full bg-slate-50 border ${eventAuthModal.error ? 'border-rose-300 focus:border-rose-500' : 'border-slate-200 focus:border-slate-900'} rounded-[1.2rem] p-4 text-[15px] font-black focus:outline-none tracking-widest text-center transition-colors`} value={eventAuthModal.password} onChange={(e) => setEventAuthModal({...eventAuthModal, password: e.target.value, error: ''})} />
+                  {eventAuthModal.error && <p className="text-rose-500 text-[11px] font-bold text-center mt-1">{eventAuthModal.error}</p>}
+                </div>
+                <div className="flex flex-col gap-2.5 pt-2">
+                  <button type="submit" className="w-full py-4 bg-slate-900 text-white rounded-2xl font-black shadow-lg active:scale-95 transition-transform tracking-widest uppercase">Mở Khóa</button>
+                  <button type="button" onClick={() => setEventAuthModal({ isOpen: false, event: null, password: '', error: '' })} className="w-full py-3.5 bg-slate-50 text-slate-400 hover:text-slate-600 rounded-2xl font-bold active:scale-95 transition-colors uppercase tracking-wider text-[12px]">Hủy Bỏ</button>
+                </div>
+              </form>
+            </div>
+          </div>
+        )}
+
+        {/* Modal Chi Tiết Đội (Nhận / Bán vé) */}
+        {selectedTeamDetailName && selectedTeamDetail && (
+          <div className="absolute inset-0 bg-slate-900/60 backdrop-blur-md z-[90] flex items-center justify-center p-6">
+            <div className="bg-white w-full max-w-[350px] rounded-[2.5rem] p-6 shadow-2xl animate-in zoom-in-95 duration-200 max-h-[85vh] flex flex-col">
+              <div className="flex justify-between items-center mb-6 shrink-0">
+                <div className="flex items-center gap-3">
+                  <div className="w-10 h-10 bg-amber-100 text-amber-600 flex items-center justify-center rounded-xl shadow-inner shrink-0">
+                    <List size={20} strokeWidth={2.5} />
+                  </div>
+                  <div>
+                    <h2 className="text-[15px] font-black tracking-tight text-slate-900 uppercase">Chi Tiết Đội</h2>
+                    <p className="text-[11px] font-bold text-slate-500 mt-0.5">{selectedTeamDetail.name}</p>
+                  </div>
+                </div>
+                <button onClick={() => setSelectedTeamDetailName(null)} className="bg-slate-100 p-2 rounded-full text-slate-500 hover:bg-slate-200 transition-colors"><X size={16} strokeWidth={2.5} /></button>
+              </div>
+
+              <div className="flex-1 overflow-y-auto pr-1 -mr-1 space-y-6 [&::-webkit-scrollbar]:hidden [-ms-overflow-style:none] [scrollbar-width:none]">
+                {selectedTeamDetail.ticketsByDate?.length > 0 && (
+                  <div>
+                    <h4 className="text-[10px] font-black uppercase text-slate-400 tracking-wider mb-3">Tổng kết bán theo ngày</h4>
+                    <div className="space-y-2 bg-amber-50 p-3 rounded-2xl border border-amber-100/50">
+                      {selectedTeamDetail.ticketsByDate.map(([date, qty]) => (
+                        <div key={date} className="flex justify-between items-center text-[12px] bg-white p-2.5 rounded-xl border border-amber-100 shadow-sm">
+                          <div className="flex items-center gap-2"><div className="w-1.5 h-1.5 bg-amber-400 rounded-full"></div><span className="font-bold text-slate-600">{date}</span></div>
+                          <div className="flex items-center gap-2">
+                            <span className="font-black text-amber-600">+{formatNumberWithDots(qty)} vé</span>
+                            {isAdmin && isAdminView && (
+                              <button onClick={() => handleDeleteTicketsByDate(selectedTeamDetail.name, date)} className="text-slate-400 hover:text-rose-500 p-1.5 bg-amber-50 rounded-lg transition-colors"><Trash2 size={12} /></button>
+                            )}
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {selectedTeamDetail.transactions?.length > 0 ? (
+                  <div>
+                    <h4 className="text-[10px] font-black uppercase text-slate-400 tracking-wider mb-3">Chi tiết giao dịch</h4>
+                    <div className="space-y-2.5 bg-slate-50 p-3 rounded-2xl border border-slate-100/50">
+                      {selectedTeamDetail.transactions.map((t) => (
+                        <div key={t.id} className="flex justify-between items-center text-[12px] bg-white p-2.5 rounded-xl border border-slate-100 shadow-sm">
+                          <div className="flex flex-col gap-1.5">
+                            <div className="flex items-center gap-1.5">
+                              <div className={`w-1.5 h-1.5 rounded-full ${t.type === 'ticket_receive' ? 'bg-blue-400' : 'bg-emerald-400'}`}></div>
+                              <span className="font-bold text-slate-600">{t.date}</span>
+                              <span className={`text-[9px] font-black uppercase tracking-wider px-1.5 py-0.5 rounded ${t.type === 'ticket_receive' ? 'bg-blue-100 text-blue-600' : 'bg-emerald-100 text-emerald-600'}`}>
+                                {t.type === 'ticket_receive' ? 'Nhận' : 'Bán'}
+                              </span>
+                            </div>
+                            {t.type !== 'ticket_receive' && t.amount && (
+                              <span className="text-[10px] font-bold text-slate-400 ml-3">{formatCurrency(t.amount)}</span>
+                            )}
+                          </div>
+                          <div className="flex flex-col items-end gap-2">
+                            <span className={`font-black ${t.type === 'ticket_receive' ? 'text-blue-600' : 'text-emerald-600'}`}>
+                              +{formatNumberWithDots(t.ticketQuantity)} vé
+                            </span>
+                            {isAdmin && isAdminView && (
+                              <div className="flex items-center gap-1.5">
+                                <button onClick={() => { setSelectedTeamDetailName(null); openEditDataModal(t, 'quick_ticket', t.type); }} className="text-slate-400 hover:text-emerald-500 p-1.5 bg-slate-50 rounded-lg"><Edit2 size={12} /></button>
+                                <button onClick={() => { setSelectedTeamDetailName(null); handleDeleteData(t.id, 'transaction'); }} className="text-slate-400 hover:text-rose-500 p-1.5 bg-slate-50 rounded-lg"><Trash2 size={12} /></button>
+                              </div>
+                            )}
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                ) : (
+                  <p className="text-center text-slate-400 text-[12px] py-4">Chưa có giao dịch nào.</p>
+                )}
+              </div>
             </div>
           </div>
         )}
@@ -1018,6 +1415,60 @@ export default function App() {
           </div>
         )}
 
+        {/* Modal Xem Trước Báo Cáo */}
+        {showReportPreview && (
+          <div className="absolute inset-0 bg-slate-900/40 backdrop-blur-sm z-50 flex items-end">
+            <div className="bg-white w-full rounded-t-[2rem] p-6 pt-3 shadow-2xl animate-in slide-in-from-bottom duration-300 pb-10 max-h-[90vh] flex flex-col">
+              <div className="w-12 h-1.5 bg-slate-200 rounded-full mx-auto mb-6 shrink-0"></div>
+              <div className="flex justify-between items-center mb-6 px-1 shrink-0">
+                <div className="flex items-center gap-2">
+                  <div className="p-2 bg-slate-100 rounded-xl text-slate-700"><FileText size={20} strokeWidth={2.5} /></div>
+                  <h2 className="text-[17px] font-black tracking-tight text-slate-900 uppercase">Xem Trước Báo Cáo</h2>
+                </div>
+                <button onClick={() => setShowReportPreview(false)} className="bg-slate-100 p-2 rounded-full text-slate-500 hover:bg-slate-200 active:scale-95"><X size={18} strokeWidth={2.5} /></button>
+              </div>
+
+              <div className="flex-1 overflow-y-auto mb-6 border border-slate-100 rounded-2xl bg-white shadow-inner">
+                <table className="w-full text-left border-collapse text-[12px]">
+                  <thead className="bg-slate-50 sticky top-0 z-10 shadow-sm border-b border-slate-200">
+                    <tr className="text-slate-500 uppercase tracking-wider font-black">
+                      <th className="px-3 py-3">Ngày</th>
+                      <th className="px-3 py-3">Nội Dung</th>
+                      <th className="px-3 py-3 text-right">Số Tiền</th>
+                    </tr>
+                  </thead>
+                  <tbody className="text-slate-700 font-medium">
+                    {reportData.map((item, idx) => (
+                      <tr key={idx} className="border-b border-slate-50 hover:bg-slate-50/50">
+                        <td className="px-3 py-3 whitespace-nowrap text-[11px] font-bold text-slate-400">{item.date}</td>
+                        <td className="px-3 py-3">
+                          <span className={`font-black block text-[11px] uppercase tracking-wider mb-0.5 ${item.type === 'Thu Quỹ' || item.type === 'Ủng Hộ' ? 'text-emerald-600' : 'text-rose-600'}`}>{item.type} {item.category && `• ${item.category}`}</span>
+                          <span className="text-[13px] text-slate-800 line-clamp-2 leading-snug">{item.note}</span>
+                        </td>
+                        <td className={`px-3 py-3 text-right font-black whitespace-nowrap text-[14px] ${item.amount > 0 ? 'text-emerald-600' : 'text-slate-900'}`}>
+                          {item.amount > 0 ? '+' : ''}{formatCurrency(item.amount)}
+                        </td>
+                      </tr>
+                    ))}
+                    {reportData.length === 0 && (
+                      <tr><td colSpan="3" className="px-3 py-8 text-center text-slate-400 font-medium">Không có dữ liệu báo cáo</td></tr>
+                    )}
+                  </tbody>
+                </table>
+              </div>
+
+              <div className="shrink-0 bg-slate-50 p-4 rounded-2xl border border-slate-100 mb-6 flex flex-col gap-2.5">
+                <div className="flex justify-between items-center text-[12px] font-bold text-slate-500"><span>Tổng Thu:</span> <span className="text-emerald-600 font-black">+{formatCurrency(stats.totalIncome + stats.totalDonations)}</span></div>
+                <div className="flex justify-between items-center text-[12px] font-bold text-slate-500"><span>Tổng Chi:</span> <span className="text-rose-600 font-black">-{formatCurrency(stats.totalExpense)}</span></div>
+                <div className="flex justify-between items-center text-[15px] font-black text-slate-900 pt-2.5 border-t border-slate-200"><span>SỐ DƯ HIỆN TẠI:</span> <span>{formatCurrency(stats.balance)}</span></div>
+              </div>
+
+              <button onClick={() => { handleExportExcel(); setShowReportPreview(false); }} className="shrink-0 w-full py-4 bg-emerald-500 text-white rounded-2xl font-black flex items-center justify-center gap-2 shadow-[0_10px_25px_-5px_rgba(16,185,129,0.4)] hover:bg-emerald-600 active:scale-95 transition-all tracking-widest uppercase">
+                <Download size={18} strokeWidth={2.5} /> Xuất File Excel
+              </button>
+            </div>
+          </div>
+        )}
       </div>
     </div>
   );
