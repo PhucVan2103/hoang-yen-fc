@@ -49,7 +49,8 @@ import {
   Trophy,
   List,
   Crown,
-  Medal
+  Medal,
+  BarChart3
 } from 'lucide-react';
 
 // --- Firebase Configuration (Cấu hình thật của Hoàng Yên FC) ---
@@ -65,6 +66,11 @@ const firebaseConfig = {
 const app = initializeApp(firebaseConfig);
 const auth = getAuth(app);
 const db = getFirestore(app);
+
+const getLocalDateString = () => {
+  const d = new Date();
+  return new Date(d.getTime() - d.getTimezoneOffset() * 60000).toISOString().split('T')[0];
+};
 
 export default function App() {
   const [user, setUser] = useState(null);
@@ -100,6 +106,7 @@ export default function App() {
   const [newTournamentTicketTarget, setNewTournamentTicketTarget] = useState('');
   const [unlockedEvents, setUnlockedEvents] = useState({});
   const [selectedTeamDetailName, setSelectedTeamDetailName] = useState(null);
+  const [showChartModal, setShowChartModal] = useState(false);
   const [eventAuthModal, setEventAuthModal] = useState({ isOpen: false, event: null, password: '', error: '' });
   const [showReportPreview, setShowReportPreview] = useState(false);
 
@@ -109,7 +116,7 @@ export default function App() {
     type: 'income',
     amount: '',
     note: '',
-    date: new Date().toISOString().split('T')[0],
+    date: getLocalDateString(),
     donorName: '',
     imageUrl: '',
     category: 'Tài trợ',
@@ -356,7 +363,7 @@ export default function App() {
 
   const resetFormData = () => {
     setFormData({
-      type: 'income', amount: '', note: '', date: new Date().toISOString().split('T')[0], donorName: '', imageUrl: '', category: 'Tài trợ', ticketQuantity: '', ticketPrice: '', teamName: '', teamMembers: '', teamTicketQuota: ''
+      type: 'income', amount: '', note: '', date: getLocalDateString(), donorName: '', imageUrl: '', category: 'Tài trợ', ticketQuantity: '', ticketPrice: '', teamName: '', teamMembers: '', teamTicketQuota: ''
     });
   };
 
@@ -367,7 +374,7 @@ export default function App() {
       type: specificType,
       amount: item.amount ? formatNumberWithDots(item.amount) : '',
       note: item.note || '',
-      date: item.date || new Date().toISOString().split('T')[0],
+      date: item.date || getLocalDateString(),
       donorName: item.donorName || '',
       imageUrl: item.imageUrl || '',
       category: item.category || 'Khác',
@@ -387,7 +394,7 @@ export default function App() {
       type: 'income',
       amount: '',
       note: 'Báo cáo vé bán',
-      date: new Date().toISOString().split('T')[0],
+      date: getLocalDateString(),
       donorName: '',
       imageUrl: '',
       category: 'Bán vé',
@@ -809,11 +816,14 @@ export default function App() {
                         <div className="flex-1 min-w-0">
                           <p className="font-bold text-[14px] truncate text-slate-900">{activeFundTab === 'donations' ? item.donorName : item.note}</p>
                           {activeFundTab === 'donations' && item.note && <p className="text-[11px] text-slate-500 mt-0.5 truncate pr-2 font-medium">"{item.note}"</p>}
-                          <div className="flex items-center gap-2 mt-1.5">
+                          <div className="flex flex-wrap items-center gap-x-2 gap-y-1.5 mt-1.5">
                             {activeFundTab !== 'donations' && item.category && (
-                              <span className="px-2 py-0.5 bg-slate-100 text-slate-500 rounded-md text-[9px] font-black uppercase tracking-wider flex items-center gap-1 shrink-0"><Tag size={10} /> {item.category} {item.ticketQuantity ? `(${item.ticketQuantity} vé${item.ticketPrice ? ` x ${formatNumberWithDots(item.ticketPrice)}đ` : ''})` : ''}</span>
+                              <span className="px-2 py-0.5 bg-slate-100 text-slate-500 rounded-md text-[9px] font-black uppercase tracking-wider flex items-center gap-1 shrink-0 max-w-[160px]">
+                                <Tag size={10} className="shrink-0" />
+                                <span className="truncate">{item.category} {item.ticketQuantity ? `(${formatNumberWithDots(item.ticketQuantity)} vé)` : ''}</span>
+                              </span>
                             )}
-                            <p className="text-[10px] text-slate-400 font-black uppercase tracking-widest">{item.date}</p>
+                            <p className="text-[10px] text-slate-400 font-black uppercase tracking-widest shrink-0">{item.date}</p>
                           </div>
                         </div>
                         <div className="text-right flex flex-col items-end gap-2">
@@ -837,14 +847,21 @@ export default function App() {
             {/* --- TAB THI ĐUA (CHỈ DÀNH CHO XỔ SỐ) --- */}
             {activeMainTab === 'competition' && activeTournament?.category === 'Xổ số' && (
               <div className="animate-in fade-in slide-in-from-bottom-4 duration-300 px-5 pt-5 pb-8">
-                <div className="flex items-center gap-3 mb-6 bg-amber-50 p-4 rounded-2xl border border-amber-100/50 shadow-sm">
+                <div className="flex items-center gap-3 mb-6 bg-amber-50 p-4 rounded-2xl border border-amber-100/50 shadow-sm relative">
                   <div className="w-12 h-12 bg-amber-100 text-amber-600 flex items-center justify-center rounded-xl shadow-inner shrink-0">
                     <Trophy size={28} strokeWidth={2.5} />
                   </div>
-                  <div>
+                  <div className="flex-1">
                     <h2 className="text-[15px] font-black tracking-tight text-amber-900 uppercase">Bảng Xếp Hạng</h2>
                     <p className="text-[11px] font-bold text-amber-700/70 mt-0.5">Các đội bán vé xuất sắc nhất</p>
                   </div>
+                  <button 
+                    onClick={() => setShowChartModal(true)} 
+                    className="p-2.5 bg-amber-200/50 text-amber-700 rounded-xl hover:bg-amber-200 active:scale-95 transition-all shadow-sm"
+                    title="Xem biểu đồ"
+                  >
+                    <BarChart3 size={20} strokeWidth={2.5} />
+                  </button>
                 </div>
 
                 {teamLeaderboard.length === 0 ? (
@@ -981,6 +998,55 @@ export default function App() {
               </button>
             )}
           </main>
+        )}
+
+        {/* Modal Biểu Đồ Thống Kê Thi Đua */}
+        {showChartModal && (
+          <div className="absolute inset-0 bg-slate-900/60 backdrop-blur-md z-[100] flex items-center justify-center p-6">
+            <div className="bg-white w-full max-w-[380px] rounded-[2.5rem] p-6 shadow-2xl animate-in zoom-in-95 duration-200 max-h-[85vh] flex flex-col">
+              <div className="flex justify-between items-center mb-6 shrink-0">
+                <div className="flex items-center gap-3">
+                  <div className="w-10 h-10 bg-amber-100 text-amber-600 flex items-center justify-center rounded-xl shadow-inner shrink-0">
+                    <BarChart3 size={20} strokeWidth={2.5} />
+                  </div>
+                  <div>
+                    <h2 className="text-[15px] font-black tracking-tight text-slate-900 uppercase">Biểu Đồ Vé Bán</h2>
+                    <p className="text-[11px] font-bold text-slate-500 mt-0.5">Thống kê số lượng theo đội</p>
+                  </div>
+                </div>
+                <button onClick={() => setShowChartModal(false)} className="bg-slate-100 p-2 rounded-full text-slate-500 hover:bg-slate-200 transition-colors"><X size={16} strokeWidth={2.5} /></button>
+              </div>
+
+              <div className="flex-1 overflow-y-auto pr-1 -mr-1 space-y-5 [&::-webkit-scrollbar]:hidden [-ms-overflow-style:none] [scrollbar-width:none]">
+                {teamLeaderboard.length === 0 ? (
+                  <p className="text-center text-slate-400 text-[12px] py-4">Chưa có dữ liệu.</p>
+                ) : (
+                  (() => {
+                    const maxTickets = Math.max(...teamLeaderboard.map(t => t.tickets), 1);
+                    return teamLeaderboard.map((team, index) => {
+                      const percentage = (team.tickets / maxTickets) * 100;
+                      let barColor = "bg-emerald-400";
+                      if (index === 0) barColor = "bg-yellow-400 shadow-[0_0_10px_rgba(250,204,21,0.5)]";
+                      else if (index === 1) barColor = "bg-slate-400 shadow-[0_0_10px_rgba(148,163,184,0.5)]";
+                      else if (index === 2) barColor = "bg-orange-400 shadow-[0_0_10px_rgba(251,146,60,0.5)]";
+
+                      return (
+                        <div key={team.name} className="flex flex-col gap-2">
+                          <div className="flex justify-between items-end text-[12px]">
+                            <span className="font-bold text-slate-700 truncate max-w-[70%]">{index + 1}. {team.name}</span>
+                            <span className="font-black text-slate-900">{formatNumberWithDots(team.tickets)} vé</span>
+                          </div>
+                          <div className="w-full h-3 bg-slate-100 rounded-full overflow-hidden shadow-inner">
+                            <div className={`h-full rounded-full transition-all duration-1000 ease-out ${barColor}`} style={{ width: `${percentage}%` }}></div>
+                          </div>
+                        </div>
+                      );
+                    });
+                  })()
+                )}
+              </div>
+            </div>
+          </div>
         )}
 
         {/* --- BOTTOM NAVIGATION BAR --- */}
