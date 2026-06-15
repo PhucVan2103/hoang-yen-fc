@@ -334,11 +334,6 @@ export default function App() {
     const unsubAdmins = onSnapshot(collection(db, 'admins'), (snap) => setAdminEmails(snap.docs.map(doc => doc.id)));
     const unsubTournaments = onSnapshot(collection(db, 'tournaments'), (snap) => {
       setTournaments(snap.docs.map(doc => ({ id: doc.id, ...doc.data() })).sort((a, b) => new Date(b.createdAt || 0) - new Date(a.createdAt || 0)));
-      // Tắt màn hình chờ sau khi load xong sự kiện
-      const loader = document.getElementById('global-loader');
-      if (loader) {
-        loader.style.opacity = '0'; loader.style.visibility = 'hidden'; setTimeout(() => loader.remove(), 400);
-      }
     });
     return () => { unsubAdmins(); unsubTournaments(); };
   }, [user]);
