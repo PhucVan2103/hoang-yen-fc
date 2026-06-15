@@ -327,7 +327,9 @@ export default function App() {
 
   useEffect(() => {
     if (user && !user.isAnonymous && user.email) {
-      setIsAdmin(user.email === MASTER_ADMIN_EMAIL || adminEmails.includes(user.email));
+      const uEmail = user.email.toLowerCase();
+      const isMaster = uEmail === MASTER_ADMIN_EMAIL.toLowerCase();
+      setIsAdmin(isMaster || adminEmails.includes(uEmail));
     } else {
       setIsAdmin(false);
     }
