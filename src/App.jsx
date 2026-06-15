@@ -16,7 +16,9 @@ import {
   deleteDoc, 
   setDoc,
   updateDoc,
-  onSnapshot 
+  onSnapshot,
+  query,
+  where
 } from 'firebase/firestore';
 import { 
   Plus, 
@@ -84,6 +86,92 @@ const hashString = async (str) => {
   const hashBuffer = await window.crypto.subtle.digest('SHA-256', msgBuffer);
   const hashArray = Array.from(new Uint8Array(hashBuffer));
   return hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
+};
+
+const EventAuthModal = ({ isOpen, onClose, event, onSuccess }) => {
+  const [password, setPassword] = useState('');
+  const [error, setError] = useState('');
+
+  useEffect(() => { if (isOpen) { setPassword(''); setError(''); } }, [isOpen]);
+  if (!isOpen) return null;
+
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+    const inputHash = await hashString(password);
+    if (inputHash === event?.passwordHash || password === event?.password) {
+      onSuccess(event.id);
+    } else {
+      setError('Mật khẩu không chính xác!');
+    }
+  };
+
+  return (
+    <div className="absolute inset-0 bg-slate-900/60 backdrop-blur-md z-[120] flex items-center justify-center p-6">
+      <div className="bg-white w-full max-w-[320px] rounded-[2.5rem] p-8 shadow-2xl animate-in zoom-in-95 duration-200">
+        <div className="mx-auto w-16 h-16 bg-slate-100 rounded-full flex items-center justify-center mb-4 text-slate-700 shadow-inner"><Lock size={28} strokeWidth={2.5} /></div>
+        <h2 className="text-[17px] font-black tracking-tight text-slate-900 text-center uppercase mb-1">Sự Kiện Riêng Tư</h2>
+        <p className="text-center text-[12px] font-bold text-slate-500 mb-6 truncate px-2">{event?.name}</p>
+        <form onSubmit={handleSubmit} className="space-y-4">
+          <div className="space-y-1.5">
+            <input type="password" required autoFocus placeholder="Nhập mật khẩu..." className={`w-full bg-slate-50 border ${error ? 'border-rose-300 focus:border-rose-500' : 'border-slate-200 focus:border-slate-900'} rounded-[1.2rem] p-4 text-[15px] font-black focus:outline-none tracking-widest text-center transition-colors`} value={password} onChange={(e) => { setPassword(e.target.value); setError(''); }} />
+            {error && <p className="text-rose-500 text-[11px] font-bold text-center mt-1">{error}</p>}
+          </div>
+          <div className="flex flex-col gap-2.5 pt-2">
+            <button type="submit" className="w-full py-4 bg-slate-900 text-white rounded-2xl font-black shadow-lg active:scale-95 transition-transform tracking-widest uppercase">Mở Khóa</button>
+            <button type="button" onClick={onClose} className="w-full py-3.5 bg-slate-50 text-slate-400 hover:text-slate-600 rounded-2xl font-bold active:scale-95 transition-colors uppercase tracking-wider text-[12px]">Hủy Bỏ</button>
+          </div>
+        </form>
+      </div>
+    </div>
+  );
+};
+
+const AdminManagerModal = ({ isOpen, onClose, adminEmails, onAdd, onDelete }) => {
+  const [newAdminEmail, setNewAdminEmail] = useState('');
+  
+  useEffect(() => { if (isOpen) setNewAdminEmail(''); }, [isOpen]);
+  if (!isOpen) return null;
+
+  const handleSubmit = (e) => {
+    e.preventDefault();
+    onAdd(newAdminEmail);
+    setNewAdminEmail('');
+  };
+
+  return (
+    <div className="absolute inset-0 bg-slate-900/60 backdrop-blur-md z-[120] flex items-center justify-center p-6">
+      <div className="bg-white w-full max-w-[380px] rounded-[2.5rem] p-6 shadow-2xl animate-in zoom-in-95 duration-200 flex flex-col max-h-[85vh]">
+        <div className="flex justify-between items-center mb-6 shrink-0">
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 bg-indigo-100 text-indigo-600 flex items-center justify-center rounded-xl shadow-inner shrink-0"><Users size={20} strokeWidth={2.5} /></div>
+            <div>
+              <h2 className="text-[17px] font-black tracking-tight text-slate-900 uppercase">Quản Lý Admin</h2>
+              <p className="text-[11px] font-bold text-slate-500 mt-0.5">Thêm/bớt quyền quản trị</p>
+            </div>
+          </div>
+          <button onClick={onClose} className="bg-slate-100 p-2 rounded-full text-slate-500 hover:bg-slate-200 transition-colors"><X size={16} strokeWidth={2.5} /></button>
+        </div>
+        <div className="flex-1 overflow-y-auto mb-4 space-y-2 [&::-webkit-scrollbar]:hidden [-ms-overflow-style:none] [scrollbar-width:none]">
+          <div className="flex justify-between items-center bg-slate-50 p-3 rounded-xl border border-slate-100">
+            <span className="text-[13px] font-bold text-slate-700 truncate mr-2">{MASTER_ADMIN_EMAIL}</span>
+            <span className="text-[10px] font-black uppercase text-indigo-600 bg-indigo-100 px-2 py-1 rounded-md shrink-0">Mặc định</span>
+          </div>
+          {adminEmails.filter(email => email !== MASTER_ADMIN_EMAIL).map(email => (
+            <div key={email} className="flex justify-between items-center bg-white p-3 rounded-xl border border-slate-200 shadow-sm">
+              <span className="text-[13px] font-bold text-slate-700 truncate mr-2">{email}</span>
+              <button onClick={() => onDelete(email)} className="text-slate-400 hover:text-rose-500 p-1.5 bg-slate-50 rounded-lg shrink-0"><Trash2 size={14} /></button>
+            </div>
+          ))}
+        </div>
+        <div className="shrink-0 pt-4 border-t border-slate-100">
+          <form onSubmit={handleSubmit} className="flex gap-2">
+            <input type="email" required placeholder="Nhập Gmail mới..." className="flex-1 w-0 bg-slate-50 border border-slate-200 rounded-xl p-3 text-[13px] font-bold focus:border-indigo-500 focus:outline-none" value={newAdminEmail} onChange={(e) => setNewAdminEmail(e.target.value)} />
+            <button type="submit" className="bg-indigo-600 text-white px-4 rounded-xl font-black text-[13px] hover:bg-indigo-700 active:scale-95 transition-all shadow-md shrink-0">Thêm</button>
+          </form>
+        </div>
+      </div>
+    </div>
+  );
 };
 
 export default function App() {
@@ -243,19 +331,30 @@ export default function App() {
 
   useEffect(() => {
     if (!user) return;
-    const unsubTrans = onSnapshot(collection(db, 'transactions'), (snap) => setTransactions(snap.docs.map(doc => ({ id: doc.id, ...doc.data() })).sort(sortNewestFirst)));
-    const unsubDonations = onSnapshot(collection(db, 'donations'), (snap) => setDonations(snap.docs.map(doc => ({ id: doc.id, ...doc.data() })).sort(sortNewestFirst)));
-    const unsubPhotos = onSnapshot(collection(db, 'gallery'), (snap) => setPhotos(snap.docs.map(doc => ({ id: doc.id, ...doc.data() })).sort(sortNewestFirst)));
-    const unsubTeams = onSnapshot(collection(db, 'teams'), (snap) => setTeams(snap.docs.map(doc => ({ id: doc.id, ...doc.data() }))));
     const unsubAdmins = onSnapshot(collection(db, 'admins'), (snap) => setAdminEmails(snap.docs.map(doc => doc.id)));
     const unsubTournaments = onSnapshot(collection(db, 'tournaments'), (snap) => setTournaments(snap.docs.map(doc => ({ id: doc.id, ...doc.data() })).sort((a, b) => new Date(b.createdAt || 0) - new Date(a.createdAt || 0))));
-    return () => { unsubTrans(); unsubDonations(); unsubPhotos(); unsubTeams(); unsubAdmins(); unsubTournaments(); };
+    return () => { unsubAdmins(); unsubTournaments(); };
   }, [user]);
 
-  const currentTransactions = useMemo(() => transactions.filter(t => t.tournamentId === activeTournamentId), [transactions, activeTournamentId]);
-  const currentDonations = useMemo(() => donations.filter(d => d.tournamentId === activeTournamentId), [donations, activeTournamentId]);
-  const currentTeams = useMemo(() => teams.filter(t => t.tournamentId === activeTournamentId), [teams, activeTournamentId]);
-  const currentPhotos = useMemo(() => photos.filter(p => p.tournamentId === activeTournamentId), [photos, activeTournamentId]);
+  // CHỈ tải dữ liệu chi tiết khi người dùng truy cập vào một Sự kiện cụ thể
+  useEffect(() => {
+    if (!user || !activeTournamentId) {
+      setTransactions([]); setDonations([]); setPhotos([]); setTeams([]);
+      return;
+    }
+    
+    const unsubTrans = onSnapshot(query(collection(db, 'transactions'), where('tournamentId', '==', activeTournamentId)), (snap) => setTransactions(snap.docs.map(doc => ({ id: doc.id, ...doc.data() })).sort(sortNewestFirst)));
+    const unsubDonations = onSnapshot(query(collection(db, 'donations'), where('tournamentId', '==', activeTournamentId)), (snap) => setDonations(snap.docs.map(doc => ({ id: doc.id, ...doc.data() })).sort(sortNewestFirst)));
+    const unsubPhotos = onSnapshot(query(collection(db, 'gallery'), where('tournamentId', '==', activeTournamentId)), (snap) => setPhotos(snap.docs.map(doc => ({ id: doc.id, ...doc.data() })).sort(sortNewestFirst)));
+    const unsubTeams = onSnapshot(query(collection(db, 'teams'), where('tournamentId', '==', activeTournamentId)), (snap) => setTeams(snap.docs.map(doc => ({ id: doc.id, ...doc.data() }))));
+
+    return () => { unsubTrans(); unsubDonations(); unsubPhotos(); unsubTeams(); };
+  }, [user, activeTournamentId]);
+
+  const currentTransactions = useMemo(() => transactions, [transactions]);
+  const currentDonations = useMemo(() => donations, [donations]);
+  const currentTeams = useMemo(() => teams, [teams]);
+  const currentPhotos = useMemo(() => photos, [photos]);
 
   const stats = useMemo(() => {
     const income = currentTransactions.filter(t => t.type === 'income').reduce((sum, t) => sum + Number(t.amount), 0);
@@ -330,19 +429,32 @@ export default function App() {
 
   const tournamentStats = useMemo(() => {
     const statsMap = {};
-    tournaments.forEach(t => statsMap[t.id] = { balance: 0 });
+    tournaments.forEach(t => {
+      // Ưu tiên đọc số dư đã lưu sẵn trên Database (Tối ưu cho Trang chủ)
+      statsMap[t.id] = { balance: t.balance || 0, totalTicketsSold: t.totalTicketsSold || 0 };
+    });
+    
+    // Với sự kiện đang được mở, reset lại 0 để cộng dồn trực tiếp từ Real-time
+    if (activeTournamentId && statsMap[activeTournamentId]) {
+      statsMap[activeTournamentId].balance = 0;
+      statsMap[activeTournamentId].totalTicketsSold = 0;
+    }
+
     transactions.forEach(tx => {
-      if (statsMap[tx.tournamentId]) {
+      if (statsMap[tx.tournamentId] && tx.tournamentId === activeTournamentId) {
         statsMap[tx.tournamentId].balance += tx.type === 'income' ? Number(tx.amount) : -Number(tx.amount);
+        if (tx.type === 'income' && tx.category === 'Bán vé') {
+          statsMap[tx.tournamentId].totalTicketsSold += Number(tx.ticketQuantity || 0);
+        }
       }
     });
     donations.forEach(d => {
-      if (statsMap[d.tournamentId]) {
+      if (statsMap[d.tournamentId] && d.tournamentId === activeTournamentId) {
         statsMap[d.tournamentId].balance += Number(d.amount);
       }
     });
     return statsMap;
-  }, [tournaments, transactions, donations]);
+  }, [tournaments, transactions, donations, activeTournamentId]);
 
   const openConfirm = (title, message, onConfirm, type = 'danger') => setConfirmModal({ isOpen: true, title, message, onConfirm, type });
   const closeConfirm = () => setConfirmModal(prev => ({ ...prev, isOpen: false }));
@@ -383,12 +495,10 @@ export default function App() {
     }
   };
 
-  const handleAddAdmin = async (e) => {
-    e.preventDefault();
-    if (!newAdminEmail.trim() || !isAdmin) return;
+  const handleAddAdmin = async (email) => {
+    if (!email || !email.trim() || !isAdmin) return;
     try {
-      await setDoc(doc(db, 'admins', newAdminEmail.trim().toLowerCase()), { addedAt: new Date().toISOString(), addedBy: user?.email });
-      setNewAdminEmail('');
+      await setDoc(doc(db, 'admins', email.trim().toLowerCase()), { addedAt: new Date().toISOString(), addedBy: user?.email });
     } catch (err) { console.error(err); alert("Lỗi! Đảm bảo bạn có quyền Thêm Admin."); }
   };
 
@@ -746,45 +856,7 @@ export default function App() {
           </main>
         )}
 
-        {/* Modal Quản Lý Admin */}
-        {showAdminModal && (
-          <div className="absolute inset-0 bg-slate-900/60 backdrop-blur-md z-[120] flex items-center justify-center p-6">
-            <div className="bg-white w-full max-w-[380px] rounded-[2.5rem] p-6 shadow-2xl animate-in zoom-in-95 duration-200 flex flex-col max-h-[85vh]">
-              <div className="flex justify-between items-center mb-6 shrink-0">
-                <div className="flex items-center gap-3">
-                  <div className="w-10 h-10 bg-indigo-100 text-indigo-600 flex items-center justify-center rounded-xl shadow-inner shrink-0">
-                    <Users size={20} strokeWidth={2.5} />
-                  </div>
-                  <div>
-                    <h2 className="text-[15px] font-black tracking-tight text-slate-900 uppercase">Quản Lý Admin</h2>
-                    <p className="text-[11px] font-bold text-slate-500 mt-0.5">Thêm/bớt quyền quản trị</p>
-                  </div>
-                </div>
-                <button onClick={() => setShowAdminModal(false)} className="bg-slate-100 p-2 rounded-full text-slate-500 hover:bg-slate-200 transition-colors"><X size={16} strokeWidth={2.5} /></button>
-              </div>
-
-              <div className="flex-1 overflow-y-auto mb-4 space-y-2 [&::-webkit-scrollbar]:hidden [-ms-overflow-style:none] [scrollbar-width:none]">
-                <div className="flex justify-between items-center bg-slate-50 p-3 rounded-xl border border-slate-100">
-                  <span className="text-[13px] font-bold text-slate-700 truncate mr-2">{MASTER_ADMIN_EMAIL}</span>
-                  <span className="text-[10px] font-black uppercase text-indigo-600 bg-indigo-100 px-2 py-1 rounded-md shrink-0">Mặc định</span>
-                </div>
-                {adminEmails.filter(email => email !== MASTER_ADMIN_EMAIL).map(email => (
-                  <div key={email} className="flex justify-between items-center bg-white p-3 rounded-xl border border-slate-200 shadow-sm">
-                    <span className="text-[13px] font-bold text-slate-700 truncate mr-2">{email}</span>
-                    <button onClick={() => handleDeleteAdmin(email)} className="text-slate-400 hover:text-rose-500 p-1.5 bg-slate-50 rounded-lg shrink-0"><Trash2 size={14} /></button>
-                  </div>
-                ))}
-              </div>
-
-              <div className="shrink-0 pt-4 border-t border-slate-100">
-                <form onSubmit={handleAddAdmin} className="flex gap-2">
-                  <input type="email" required placeholder="Nhập Gmail mới..." className="flex-1 w-0 bg-slate-50 border border-slate-200 rounded-xl p-3 text-[13px] font-bold focus:border-indigo-500 focus:outline-none" value={newAdminEmail} onChange={(e) => setNewAdminEmail(e.target.value)} />
-                  <button type="submit" className="bg-indigo-600 text-white px-4 rounded-xl font-black text-[13px] hover:bg-indigo-700 active:scale-95 transition-all shadow-md shrink-0">Thêm</button>
-                </form>
-              </div>
-            </div>
-          </div>
-        )}
+        <AdminManagerModal isOpen={showAdminModal} onClose={() => setShowAdminModal(false)} adminEmails={adminEmails} onAdd={handleAddAdmin} onDelete={handleDeleteAdmin} />
 
         {/* NỘI DUNG MÀN HÌNH CHI TIẾT SỰ KIỆN */}
         {currentScreen === 'detail' && (
@@ -1494,39 +1566,16 @@ export default function App() {
           </div>
         )}
 
-        {/* Modal Mật Khẩu Sự Kiện */}
-        {eventAuthModal.isOpen && (
-          <div className="absolute inset-0 bg-slate-900/60 backdrop-blur-md z-[120] flex items-center justify-center p-6">
-            <div className="bg-white w-full max-w-[320px] rounded-[2.5rem] p-8 shadow-2xl animate-in zoom-in-95 duration-200">
-              <div className="mx-auto w-16 h-16 bg-slate-100 rounded-full flex items-center justify-center mb-4 text-slate-700 shadow-inner">
-                <Lock size={28} strokeWidth={2.5} />
-              </div>
-              <h2 className="text-[17px] font-black tracking-tight text-slate-900 text-center uppercase mb-1">Sự Kiện Riêng Tư</h2>
-              <p className="text-center text-[12px] font-bold text-slate-500 mb-6 truncate px-2">{eventAuthModal.event?.name}</p>
-              
-              <form onSubmit={async (e) => {
-                e.preventDefault();
-                const inputHash = await hashString(eventAuthModal.password);
-                if (inputHash === eventAuthModal.event?.passwordHash || eventAuthModal.password === eventAuthModal.event?.password) {
-                  setUnlockedEvents(prev => ({ ...prev, [eventAuthModal.event.id]: true }));
-                  goToDetail(eventAuthModal.event.id);
-                  setEventAuthModal({ isOpen: false, event: null, password: '', error: '' });
-                } else {
-                  setEventAuthModal(prev => ({ ...prev, error: 'Mật khẩu không chính xác!' }));
-                }
-              }} className="space-y-4">
-                <div className="space-y-1.5">
-                  <input type="password" required autoFocus placeholder="Nhập mật khẩu..." className={`w-full bg-slate-50 border ${eventAuthModal.error ? 'border-rose-300 focus:border-rose-500' : 'border-slate-200 focus:border-slate-900'} rounded-[1.2rem] p-4 text-[15px] font-black focus:outline-none tracking-widest text-center transition-colors`} value={eventAuthModal.password} onChange={(e) => setEventAuthModal({...eventAuthModal, password: e.target.value, error: ''})} />
-                  {eventAuthModal.error && <p className="text-rose-500 text-[11px] font-bold text-center mt-1">{eventAuthModal.error}</p>}
-                </div>
-                <div className="flex flex-col gap-2.5 pt-2">
-                  <button type="submit" className="w-full py-4 bg-slate-900 text-white rounded-2xl font-black shadow-lg active:scale-95 transition-transform tracking-widest uppercase">Mở Khóa</button>
-                  <button type="button" onClick={() => setEventAuthModal({ isOpen: false, event: null, password: '', error: '' })} className="w-full py-3.5 bg-slate-50 text-slate-400 hover:text-slate-600 rounded-2xl font-bold active:scale-95 transition-colors uppercase tracking-wider text-[12px]">Hủy Bỏ</button>
-                </div>
-              </form>
-            </div>
-          </div>
-        )}
+        <EventAuthModal 
+          isOpen={eventAuthModal.isOpen} 
+          onClose={() => setEventAuthModal({ isOpen: false, event: null })} 
+          event={eventAuthModal.event} 
+          onSuccess={(eventId) => {
+            setUnlockedEvents(prev => ({ ...prev, [eventId]: true }));
+            goToDetail(eventId);
+            setEventAuthModal({ isOpen: false, event: null });
+          }} 
+        />
 
         {/* Modal Chi Tiết Đội (Nhận / Bán vé) */}
         {selectedTeamDetailName && selectedTeamDetail && (
