@@ -4,8 +4,7 @@ import {
   getAuth, 
   signInAnonymously, 
   onAuthStateChanged,
-  signInWithRedirect,
-  getRedirectResult,
+  signInWithPopup,
   GoogleAuthProvider,
   signOut
 } from 'firebase/auth';
