@@ -45,7 +45,6 @@ import {
   Clock,
   Receipt,
   PieChart,
-  Share2,
   Download,
   Eye,
   FileText,
@@ -55,7 +54,6 @@ import {
   Crown,
   Medal,
   BarChart3,
-  LogOut,
   Users
 } from 'lucide-react';
 
@@ -375,6 +373,8 @@ export default function App() {
       console.error("Lỗi đăng nhập:", err);
       if (err.code === 'auth/popup-closed-by-user') {
         console.log("Người dùng đã tự đóng cửa sổ đăng nhập.");
+      } else if (err.code === 'auth/cancelled-popup-request') {
+        alert("Yêu cầu đăng nhập bị hủy vì có một cửa sổ đăng nhập khác đang mở. Vui lòng kiểm tra lại hoặc tải lại trang.");
       } else if (err.code === 'auth/unauthorized-domain') {
         alert("Tên miền Vercel này chưa được cấp phép. Bạn cần vào Firebase Console -> Authentication -> Settings -> Authorized Domains để thêm tên miền vào.");
       } else {
@@ -606,24 +606,6 @@ export default function App() {
     });
   };
 
-  const handleShare = async () => {
-    const shareUrl = `${window.location.origin}${window.location.pathname}?eventId=${activeTournamentId}`;
-    try {
-      if (navigator.share) {
-        await navigator.share({
-          title: activeTournamentName,
-          text: `Xem tiến độ tài chính của sự kiện: ${activeTournamentName}`,
-          url: shareUrl
-        });
-      } else {
-        await navigator.clipboard.writeText(shareUrl);
-        alert('Đã sao chép link sự kiện vào khay nhớ tạm!');
-      }
-    } catch (err) {
-      console.error("Lỗi chia sẻ:", err);
-    }
-  };
-
   const handleExportExcel = () => {
     if (!isAdmin || !isAdminView) return;
     const rows = [
@@ -693,19 +675,9 @@ export default function App() {
             </div>
           )}
           <div className="flex items-center gap-2">
-            {currentScreen === 'detail' && (
-              <button onClick={handleShare} title="Chia sẻ sự kiện" className="w-10 h-10 rounded-full flex items-center justify-center transition-all shadow-sm bg-slate-100 text-slate-600 hover:bg-slate-200 active:scale-95">
-                <Share2 size={18} />
-              </button>
-            )}
             {isAdmin && isAdminView && (
               <button onClick={() => setShowAdminModal(true)} title="Quản lý Admin" className="w-10 h-10 rounded-full flex items-center justify-center transition-all shadow-sm bg-indigo-100 text-indigo-600 hover:bg-indigo-200 active:scale-95">
                 <Users size={18} strokeWidth={2.5} />
-              </button>
-            )}
-            {isAdmin && (
-              <button onClick={async () => { await signOut(auth); setIsAdminView(true); }} title="Đăng xuất hoàn toàn" className="w-10 h-10 rounded-full flex items-center justify-center transition-all shadow-sm bg-rose-100 text-rose-600 hover:bg-rose-200 active:scale-95">
-                <LogOut size={18} strokeWidth={2.5} />
               </button>
             )}
             <button 
