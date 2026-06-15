@@ -14,6 +14,7 @@ import {
   doc, 
   addDoc, 
   deleteDoc, 
+  setDoc,
   updateDoc,
   onSnapshot 
 } from 'firebase/firestore';
@@ -54,7 +55,8 @@ import {
   Crown,
   Medal,
   BarChart3,
-  LogOut
+  LogOut,
+  Users
 } from 'lucide-react';
 
 // --- Firebase Configuration (Cấu hình thật của Hoàng Yên FC) ---
@@ -76,8 +78,8 @@ const getLocalDateString = () => {
   return new Date(d.getTime() - d.getTimezoneOffset() * 60000).toISOString().split('T')[0];
 };
 
-// Danh sách các Gmail được phép làm Admin (Hãy thay bằng Gmail thật của ban quản trị)
-const ADMIN_EMAILS = ['admin@hoangyen.com', 'phucvan20241108@gmail.com@gmail.com'];
+// Email "Chìa khóa vạn năng" (Không bao giờ bị xóa, dùng để phòng hờ)
+const MASTER_ADMIN_EMAIL = 'phucvan20241108@gmail.com';
 
 const hashString = async (str) => {
   const msgBuffer = new TextEncoder().encode(str);
@@ -95,6 +97,7 @@ export default function App() {
   const [activeMainTab, setActiveMainTab] = useState('fund'); 
   const [activeFundTab, setActiveFundTab] = useState('transactions');
   
+  const [adminEmails, setAdminEmails] = useState([]);
   const [transactions, setTransactions] = useState([]);
   const [donations, setDonations] = useState([]);
   const [tournaments, setTournaments] = useState([]);
@@ -106,6 +109,8 @@ export default function App() {
   const [modalType, setModalType] = useState('fund'); 
   const [showTournamentModal, setShowTournamentModal] = useState(false); 
   const [showLoginModal, setShowLoginModal] = useState(false);
+  const [showAdminModal, setShowAdminModal] = useState(false);
+  const [newAdminEmail, setNewAdminEmail] = useState('');
   const [editingTournament, setEditingTournament] = useState(null); 
   const [editingData, setEditingData] = useState(null); 
   const [selectedPhoto, setSelectedPhoto] = useState(null);
@@ -188,12 +193,6 @@ export default function App() {
     const unsubscribe = onAuthStateChanged(auth, (currentUser) => {
       if (currentUser) {
         setUser(currentUser);
-        // Chỉ cấp quyền Admin nếu Email đăng nhập nằm trong danh sách ADMIN_EMAILS
-        if (!currentUser.isAnonymous && currentUser.email && ADMIN_EMAILS.includes(currentUser.email)) {
-          setIsAdmin(true);
-        } else {
-          setIsAdmin(false);
-        }
       } else {
         signInAnonymously(auth).catch(console.error);
       }
@@ -202,13 +201,22 @@ export default function App() {
   }, []);
 
   useEffect(() => {
+    if (user && !user.isAnonymous && user.email) {
+      setIsAdmin(user.email === MASTER_ADMIN_EMAIL || adminEmails.includes(user.email));
+    } else {
+      setIsAdmin(false);
+    }
+  }, [user, adminEmails]);
+
+  useEffect(() => {
     if (!user) return;
     const unsubTrans = onSnapshot(collection(db, 'transactions'), (snap) => setTransactions(snap.docs.map(doc => ({ id: doc.id, ...doc.data() })).sort(sortNewestFirst)));
     const unsubDonations = onSnapshot(collection(db, 'donations'), (snap) => setDonations(snap.docs.map(doc => ({ id: doc.id, ...doc.data() })).sort(sortNewestFirst)));
     const unsubPhotos = onSnapshot(collection(db, 'gallery'), (snap) => setPhotos(snap.docs.map(doc => ({ id: doc.id, ...doc.data() })).sort(sortNewestFirst)));
     const unsubTeams = onSnapshot(collection(db, 'teams'), (snap) => setTeams(snap.docs.map(doc => ({ id: doc.id, ...doc.data() }))));
+    const unsubAdmins = onSnapshot(collection(db, 'admins'), (snap) => setAdminEmails(snap.docs.map(doc => doc.id)));
     const unsubTournaments = onSnapshot(collection(db, 'tournaments'), (snap) => setTournaments(snap.docs.map(doc => ({ id: doc.id, ...doc.data() })).sort((a, b) => new Date(b.createdAt || 0) - new Date(a.createdAt || 0))));
-    return () => { unsubTrans(); unsubDonations(); unsubPhotos(); unsubTeams(); unsubTournaments(); };
+    return () => { unsubTrans(); unsubDonations(); unsubPhotos(); unsubTeams(); unsubAdmins(); unsubTournaments(); };
   }, [user]);
 
   const currentTransactions = useMemo(() => transactions.filter(t => t.tournamentId === activeTournamentId), [transactions, activeTournamentId]);
@@ -319,7 +327,7 @@ export default function App() {
       const provider = new GoogleAuthProvider();
       const result = await signInWithPopup(auth, provider);
       
-      if (ADMIN_EMAILS.includes(result.user.email)) {
+      if (result.user.email === MASTER_ADMIN_EMAIL || adminEmails.includes(result.user.email)) {
         setIsAdminView(true);
         setShowLoginModal(false);
       } else {
@@ -329,6 +337,23 @@ export default function App() {
     } catch (err) {
       console.error("Lỗi đăng nhập:", err);
     }
+  };
+
+  const handleAddAdmin = async (e) => {
+    e.preventDefault();
+    if (!newAdminEmail.trim() || !isAdmin) return;
+    try {
+      await setDoc(doc(db, 'admins', newAdminEmail.trim().toLowerCase()), { addedAt: new Date().toISOString(), addedBy: user?.email });
+      setNewAdminEmail('');
+    } catch (err) { console.error(err); alert("Lỗi! Đảm bảo bạn có quyền Thêm Admin."); }
+  };
+
+  const handleDeleteAdmin = async (email) => {
+    if (!isAdmin) return;
+    openConfirm("Xóa Admin", `Thu hồi quyền quản trị của "${email}"?`, async () => {
+      try { await deleteDoc(doc(db, 'admins', email)); closeConfirm(); } 
+      catch (err) { console.error(err); }
+    });
   };
 
   const goToDetail = (id) => { 
@@ -629,6 +654,11 @@ export default function App() {
                 <Share2 size={18} />
               </button>
             )}
+            {isAdmin && isAdminView && (
+              <button onClick={() => setShowAdminModal(true)} title="Quản lý Admin" className="w-10 h-10 rounded-full flex items-center justify-center transition-all shadow-sm bg-indigo-100 text-indigo-600 hover:bg-indigo-200 active:scale-95">
+                <Users size={18} strokeWidth={2.5} />
+              </button>
+            )}
             {isAdmin && (
               <button onClick={async () => { await signOut(auth); setIsAdminView(true); }} title="Đăng xuất hoàn toàn" className="w-10 h-10 rounded-full flex items-center justify-center transition-all shadow-sm bg-rose-100 text-rose-600 hover:bg-rose-200 active:scale-95">
                 <LogOut size={18} strokeWidth={2.5} />
@@ -698,6 +728,46 @@ export default function App() {
               </button>
             )}
           </main>
+        )}
+
+        {/* Modal Quản Lý Admin */}
+        {showAdminModal && (
+          <div className="absolute inset-0 bg-slate-900/60 backdrop-blur-md z-[120] flex items-center justify-center p-6">
+            <div className="bg-white w-full max-w-[380px] rounded-[2.5rem] p-6 shadow-2xl animate-in zoom-in-95 duration-200 flex flex-col max-h-[85vh]">
+              <div className="flex justify-between items-center mb-6 shrink-0">
+                <div className="flex items-center gap-3">
+                  <div className="w-10 h-10 bg-indigo-100 text-indigo-600 flex items-center justify-center rounded-xl shadow-inner shrink-0">
+                    <Users size={20} strokeWidth={2.5} />
+                  </div>
+                  <div>
+                    <h2 className="text-[15px] font-black tracking-tight text-slate-900 uppercase">Quản Lý Admin</h2>
+                    <p className="text-[11px] font-bold text-slate-500 mt-0.5">Thêm/bớt quyền quản trị</p>
+                  </div>
+                </div>
+                <button onClick={() => setShowAdminModal(false)} className="bg-slate-100 p-2 rounded-full text-slate-500 hover:bg-slate-200 transition-colors"><X size={16} strokeWidth={2.5} /></button>
+              </div>
+
+              <div className="flex-1 overflow-y-auto mb-4 space-y-2 [&::-webkit-scrollbar]:hidden [-ms-overflow-style:none] [scrollbar-width:none]">
+                <div className="flex justify-between items-center bg-slate-50 p-3 rounded-xl border border-slate-100">
+                  <span className="text-[13px] font-bold text-slate-700 truncate mr-2">{MASTER_ADMIN_EMAIL}</span>
+                  <span className="text-[10px] font-black uppercase text-indigo-600 bg-indigo-100 px-2 py-1 rounded-md shrink-0">Mặc định</span>
+                </div>
+                {adminEmails.filter(email => email !== MASTER_ADMIN_EMAIL).map(email => (
+                  <div key={email} className="flex justify-between items-center bg-white p-3 rounded-xl border border-slate-200 shadow-sm">
+                    <span className="text-[13px] font-bold text-slate-700 truncate mr-2">{email}</span>
+                    <button onClick={() => handleDeleteAdmin(email)} className="text-slate-400 hover:text-rose-500 p-1.5 bg-slate-50 rounded-lg shrink-0"><Trash2 size={14} /></button>
+                  </div>
+                ))}
+              </div>
+
+              <div className="shrink-0 pt-4 border-t border-slate-100">
+                <form onSubmit={handleAddAdmin} className="flex gap-2">
+                  <input type="email" required placeholder="Nhập Gmail mới..." className="flex-1 w-0 bg-slate-50 border border-slate-200 rounded-xl p-3 text-[13px] font-bold focus:border-indigo-500 focus:outline-none" value={newAdminEmail} onChange={(e) => setNewAdminEmail(e.target.value)} />
+                  <button type="submit" className="bg-indigo-600 text-white px-4 rounded-xl font-black text-[13px] hover:bg-indigo-700 active:scale-95 transition-all shadow-md shrink-0">Thêm</button>
+                </form>
+              </div>
+            </div>
+          </div>
         )}
 
         {/* NỘI DUNG MÀN HÌNH CHI TIẾT SỰ KIỆN */}
