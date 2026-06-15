@@ -771,8 +771,8 @@ export default function App() {
         <header className="pt-14 pb-4 px-6 flex justify-between items-center bg-white shrink-0 z-10 relative border-b border-slate-100">
           {currentScreen === 'home' ? (
             <div className="flex items-center gap-3">
-              <div className="w-10 h-10 bg-slate-900 rounded-[1rem] flex items-center justify-center text-white shadow-sm">
-                <Church size={22} strokeWidth={2.5} />
+              <div className="w-11 h-11 bg-white rounded-[1rem] flex items-center justify-center shadow-sm border border-slate-100 overflow-hidden p-0.5">
+                <img src="/logo.png" alt="Logo" className="w-full h-full object-contain" />
               </div>
               <div><h1 className="text-[17px] font-black tracking-tight leading-tight uppercase">Giáo Xứ Hoàng Yên</h1><p className="text-[10px] font-bold text-slate-400 tracking-wider mt-0.5">TÀI CHÍNH SỰ KIỆN</p></div>
             </div>
