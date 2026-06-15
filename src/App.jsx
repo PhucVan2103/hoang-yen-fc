@@ -1167,7 +1167,7 @@ export default function App() {
                   <div className="text-center py-10 text-slate-400 bg-white rounded-[1.5rem] border border-slate-200"><p className="text-sm font-medium">Chưa có hình ảnh nào.</p></div>
                 ) : (
                   <div className="flex flex-col gap-6">
-                    {currentPhotos.map(photo => (
+                    {currentPhotos.slice(0, displayLimit).map(photo => (
                       <div key={photo.id} onClick={() => setSelectedPhoto(photo)} className="relative h-[300px] rounded-[2rem] overflow-hidden shadow-[0_8px_30px_-12px_rgba(0,0,0,0.1)] border border-slate-100 bg-slate-200 group cursor-pointer active:scale-[0.98] transition-transform">
                         <img src={photo.imageUrl} alt={photo.note || "Ảnh kỉ niệm"} className="w-full h-full object-cover" />
                         {photo.note && (
@@ -1183,6 +1183,11 @@ export default function App() {
                         )}
                       </div>
                     ))}
+                    {currentPhotos.length > displayLimit && (
+                      <button onClick={() => setDisplayLimit(prev => prev + 50)} className="w-full mt-2 py-3.5 bg-white border border-slate-200 text-slate-500 rounded-xl font-bold hover:bg-slate-50 active:scale-95 transition-colors shadow-sm">
+                        Xem thêm hình ảnh
+                      </button>
+                    )}
                   </div>
                 )}
               </div>
