@@ -15,8 +15,29 @@
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>hoang-yen-fc</title>
+    <style>
+      body { margin: 0; padding: 0; background-color: #f4f6f8; }
+      #global-loader {
+        position: fixed; top: 0; left: 0; width: 100vw; height: 100vh;
+        background-color: #f4f6f8; z-index: 99999;
+        display: flex; flex-direction: column; align-items: center; justify-content: center;
+        transition: opacity 0.4s ease-out, visibility 0.4s ease-out;
+      }
+      .loader-logo { width: 90px; height: 90px; border-radius: 24px; box-shadow: 0 10px 25px rgba(0,0,0,0.08); margin-bottom: 24px; background: white; padding: 6px; }
+      .loader-spinner {
+        width: 34px; height: 34px; border: 3px solid rgba(16, 185, 129, 0.2);
+        border-top-color: #10b981; border-radius: 50%;
+        animation: spin 0.8s linear infinite;
+      }
+      @keyframes spin { to { transform: rotate(360deg); } }
+    </style>
   </head>
   <body>
+    <div id="global-loader">
+      <img src="/logo.png" alt="Loading..." class="loader-logo" />
+      <div class="loader-spinner"></div>
+      <p style="margin-top: 20px; font-family: sans-serif; font-size: 11px; font-weight: bold; color: #94a3b8; letter-spacing: 2px;">ĐANG TẢI DỮ LIỆU...</p>
+    </div>
     <div id="root"></div>
     <script type="module" src="/src/main.jsx"></script>
   </body>
