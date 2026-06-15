@@ -4,7 +4,8 @@ import {
   getAuth, 
   signInAnonymously, 
   onAuthStateChanged,
-  signInWithPopup,
+  signInWithRedirect,
+  getRedirectResult,
   GoogleAuthProvider,
   signOut
 } from 'firebase/auth';
@@ -18,7 +19,8 @@ import {
   updateDoc,
   onSnapshot,
   query,
-  where
+  where,
+  getDoc
 } from 'firebase/firestore';
 import { 
   Plus, 
@@ -264,6 +266,30 @@ export default function App() {
       setActiveTournamentId(eventId);
       setCurrentScreen('detail');
     }
+  }, []);
+
+  // Xử lý kết quả đăng nhập từ Google Redirect
+  useEffect(() => {
+    getRedirectResult(auth).then(async (result) => {
+      if (result && result.user && result.user.email) {
+        const email = result.user.email;
+        if (email === MASTER_ADMIN_EMAIL) {
+          setIsAdminView(true);
+          setShowLoginModal(false);
+        } else {
+          const adminDoc = await getDoc(doc(db, 'admins', email.toLowerCase()));
+          if (adminDoc.exists()) {
+            setIsAdminView(true);
+            setShowLoginModal(false);
+          } else {
+            alert(`Tài khoản "${email}" không có quyền quản trị viên!\nVui lòng sử dụng tài khoản đã được cấp phép.`);
+            await signOut(auth);
+          }
+        }
+      }
+    }).catch(err => {
+      console.error("Lỗi Redirect:", err);
+    });
   }, []);
 
   // Đảm bảo tắt màn hình chờ an toàn không phụ thuộc vào tốc độ mạng
