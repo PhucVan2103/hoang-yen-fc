@@ -1,0 +1,15 @@
+{
+  "name": "Tài Chính Giáo Xứ Hoàng Yên",
+  "short_name": "Tài Chính",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#f4f6f8",
+  "theme_color": "#f4f6f8",
+  "icons": [
+    {
+      "src": "/logo.png",
+      "sizes": "192x192 512x512",
+      "type": "image/png"
+    }
+  ]
+}
