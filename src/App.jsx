@@ -266,6 +266,19 @@ export default function App() {
     }
   }, []);
 
+  // Đảm bảo tắt màn hình chờ an toàn không phụ thuộc vào tốc độ mạng
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      const loader = document.getElementById('global-loader');
+      if (loader) {
+        loader.style.opacity = '0';
+        loader.style.visibility = 'hidden';
+        setTimeout(() => loader.remove(), 400);
+      }
+    }, 1200); // Ẩn màn hình chờ sau 1.2 giây
+    return () => clearTimeout(timer);
+  }, []);
+
   // Chặn người dùng nếu họ truy cập bằng link trực tiếp vào sự kiện có mật khẩu
   useEffect(() => {
     if (currentScreen === 'detail' && activeTournament && !isAdmin && (activeTournament.passwordHash || activeTournament.password) && !unlockedEvents[activeTournament.id]) {
