@@ -77,7 +77,14 @@ const getLocalDateString = () => {
 };
 
 // Danh sách các Gmail được phép làm Admin (Hãy thay bằng Gmail thật của ban quản trị)
-const ADMIN_EMAILS = ['admin@hoangyen.com', 'your.email@gmail.com'];
+const ADMIN_EMAILS = ['admin@hoangyen.com', 'phucvan20241108@gmail.com@gmail.com'];
+
+const hashString = async (str) => {
+  const msgBuffer = new TextEncoder().encode(str);
+  const hashBuffer = await window.crypto.subtle.digest('SHA-256', msgBuffer);
+  const hashArray = Array.from(new Uint8Array(hashBuffer));
+  return hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
+};
 
 export default function App() {
   const [user, setUser] = useState(null);
@@ -108,6 +115,7 @@ export default function App() {
   const [newTournamentTarget, setNewTournamentTarget] = useState('');
   const [newTournamentCategory, setNewTournamentCategory] = useState('Quyên góp');
   const [newTournamentPassword, setNewTournamentPassword] = useState('');
+  const [isPrivateEvent, setIsPrivateEvent] = useState(false);
   const [newTournamentTicketPrice, setNewTournamentTicketPrice] = useState('');
   const [newTournamentTicketTarget, setNewTournamentTicketTarget] = useState('');
   const [unlockedEvents, setUnlockedEvents] = useState({});
@@ -169,7 +177,7 @@ export default function App() {
 
   // Chặn người dùng nếu họ truy cập bằng link trực tiếp vào sự kiện có mật khẩu
   useEffect(() => {
-    if (currentScreen === 'detail' && activeTournament && !isAdmin && activeTournament.password && !unlockedEvents[activeTournament.id]) {
+    if (currentScreen === 'detail' && activeTournament && !isAdmin && (activeTournament.passwordHash || activeTournament.password) && !unlockedEvents[activeTournament.id]) {
       setEventAuthModal({ isOpen: true, event: activeTournament, password: '', error: '' });
       setCurrentScreen('home'); 
       window.history.pushState({}, '', window.location.pathname);
@@ -334,7 +342,7 @@ export default function App() {
   };
 
   const handleEventClick = (t) => {
-    if (isAdmin || !t.password || unlockedEvents[t.id]) {
+    if (isAdmin || !(t.passwordHash || t.password) || unlockedEvents[t.id]) {
       goToDetail(t.id);
     } else {
       setEventAuthModal({ isOpen: true, event: t, password: '', error: '' });
@@ -479,8 +487,15 @@ export default function App() {
   };
 
   const openTournamentModal = (tournament = null) => {
-    if (tournament) { setEditingTournament(tournament); setNewTournamentName(tournament.name); setNewTournamentImage(tournament.imageUrl || ''); setNewTournamentTarget(tournament.targetAmount ? formatNumberWithDots(tournament.targetAmount) : ''); setNewTournamentCategory(tournament.category || 'Quyên góp'); setNewTournamentPassword(tournament.password || ''); setNewTournamentTicketPrice(tournament.ticketPrice ? formatNumberWithDots(tournament.ticketPrice) : ''); setNewTournamentTicketTarget(tournament.ticketTarget ? formatNumberWithDots(tournament.ticketTarget) : ''); } 
-    else { setEditingTournament(null); setNewTournamentName(''); setNewTournamentImage(''); setNewTournamentTarget(''); setNewTournamentCategory('Quyên góp'); setNewTournamentPassword(''); setNewTournamentTicketPrice(''); setNewTournamentTicketTarget(''); }
+    if (tournament) { 
+      setEditingTournament(tournament); setNewTournamentName(tournament.name); setNewTournamentImage(tournament.imageUrl || ''); setNewTournamentTarget(tournament.targetAmount ? formatNumberWithDots(tournament.targetAmount) : ''); setNewTournamentCategory(tournament.category || 'Quyên góp'); setNewTournamentTicketPrice(tournament.ticketPrice ? formatNumberWithDots(tournament.ticketPrice) : ''); setNewTournamentTicketTarget(tournament.ticketTarget ? formatNumberWithDots(tournament.ticketTarget) : ''); 
+      setIsPrivateEvent(!!tournament.passwordHash || !!tournament.password);
+      setNewTournamentPassword('');
+    } else { 
+      setEditingTournament(null); setNewTournamentName(''); setNewTournamentImage(''); setNewTournamentTarget(''); setNewTournamentCategory('Quyên góp'); setNewTournamentTicketPrice(''); setNewTournamentTicketTarget(''); 
+      setIsPrivateEvent(false);
+      setNewTournamentPassword('');
+    }
     setShowTournamentModal(true);
   };
 
@@ -492,10 +507,23 @@ export default function App() {
       const targetVal = parseFormattedNumber(newTournamentTarget) || 0;
       const ticketPriceVal = parseFormattedNumber(newTournamentTicketPrice) || 0;
       const ticketTargetVal = parseFormattedNumber(newTournamentTicketTarget) || 0;
+      
+      let finalPasswordHash = null;
+      let finalPassword = null;
+      if (isPrivateEvent) {
+        if (newTournamentPassword.trim()) {
+          finalPasswordHash = await hashString(newTournamentPassword.trim());
+        } else {
+          finalPasswordHash = editingTournament?.passwordHash || null;
+          finalPassword = editingTournament?.password || null;
+          if (!finalPasswordHash && !finalPassword && !editingTournament) { alert("Vui lòng nhập mật khẩu cho sự kiện!"); return; }
+        }
+      }
+
       if (editingTournament) {
-        await updateDoc(doc(db, 'tournaments', editingTournament.id), { name: newTournamentName.trim(), imageUrl: newTournamentImage.trim(), targetAmount: targetVal, category: newTournamentCategory, password: newTournamentPassword.trim(), ticketPrice: newTournamentCategory === 'Xổ số' ? ticketPriceVal : 0, ticketTarget: newTournamentCategory === 'Xổ số' ? ticketTargetVal : 0, updatedAt: timestamp });
+        await updateDoc(doc(db, 'tournaments', editingTournament.id), { name: newTournamentName.trim(), imageUrl: newTournamentImage.trim(), targetAmount: targetVal, category: newTournamentCategory, passwordHash: finalPasswordHash, password: finalPassword, ticketPrice: newTournamentCategory === 'Xổ số' ? ticketPriceVal : 0, ticketTarget: newTournamentCategory === 'Xổ số' ? ticketTargetVal : 0, updatedAt: timestamp });
       } else {
-        await addDoc(collection(db, 'tournaments'), { name: newTournamentName.trim(), imageUrl: newTournamentImage.trim(), targetAmount: targetVal, category: newTournamentCategory, password: newTournamentPassword.trim(), ticketPrice: newTournamentCategory === 'Xổ số' ? ticketPriceVal : 0, ticketTarget: newTournamentCategory === 'Xổ số' ? ticketTargetVal : 0, createdAt: timestamp });
+        await addDoc(collection(db, 'tournaments'), { name: newTournamentName.trim(), imageUrl: newTournamentImage.trim(), targetAmount: targetVal, category: newTournamentCategory, passwordHash: finalPasswordHash, password: finalPassword, ticketPrice: newTournamentCategory === 'Xổ số' ? ticketPriceVal : 0, ticketTarget: newTournamentCategory === 'Xổ số' ? ticketTargetVal : 0, createdAt: timestamp });
       }
       setShowTournamentModal(false);
     } catch (err) { console.error(err); }
@@ -641,7 +669,7 @@ export default function App() {
                         )}
                         <div className="absolute bottom-0 left-0 p-6 w-full">
                           <div className="bg-emerald-500 text-white text-[10px] font-black px-2.5 py-1 rounded-lg inline-flex items-center gap-1 mb-2 uppercase tracking-wider">
-                            {t.password && <Lock size={10} strokeWidth={3} />} {t.category || 'SỰ KIỆN'}
+                            {(t.passwordHash || t.password) && <Lock size={10} strokeWidth={3} />} {t.category || 'SỰ KIỆN'}
                           </div>
                           <h3 className="text-white font-black text-[22px] leading-tight line-clamp-2 shadow-black/50 drop-shadow-md">{t.name}</h3>
                           {t.targetAmount > 0 && (
@@ -1332,9 +1360,17 @@ export default function App() {
                   <label className="text-[11px] font-black text-slate-400 ml-1 uppercase tracking-wider">Mục Tiêu Gây Quỹ (VNĐ)</label>
                   <input type="text" placeholder="Tùy chọn (VD: 50.000.000)" className="w-full bg-slate-50 border border-slate-200 rounded-[1.2rem] p-3.5 text-[15px] font-bold focus:border-slate-900 focus:outline-none text-emerald-600" value={newTournamentTarget} onChange={(e) => setNewTournamentTarget(formatNumberWithDots(e.target.value))} />
                 </div>
-                <div className="space-y-1.5">
-                  <label className="text-[11px] font-black text-slate-400 ml-1 flex items-center gap-1 uppercase tracking-wider"><Lock size={13} /> Mật khẩu sự kiện</label>
-                  <input type="text" placeholder="Tùy chọn (Để trống nếu công khai)" className="w-full bg-slate-50 border border-slate-200 rounded-[1.2rem] p-3.5 text-[15px] font-bold focus:border-slate-900 focus:outline-none" value={newTournamentPassword} onChange={(e) => setNewTournamentPassword(e.target.value)} />
+                <div className="space-y-1.5 border-t border-slate-100 pt-4">
+                  <label className="flex items-center gap-2 cursor-pointer">
+                    <input type="checkbox" className="w-4 h-4 text-emerald-500 rounded border-slate-300 focus:ring-emerald-500" checked={isPrivateEvent} onChange={(e) => setIsPrivateEvent(e.target.checked)} />
+                    <span className="text-[13px] font-bold text-slate-700">Sự kiện riêng tư (Cần mật khẩu)</span>
+                  </label>
+                  {isPrivateEvent && (
+                    <div className="mt-3 space-y-1.5 animate-in fade-in slide-in-from-top-1 duration-200">
+                      <label className="text-[11px] font-black text-slate-400 ml-1 flex items-center gap-1 uppercase tracking-wider"><Lock size={13} /> Thiết lập mật khẩu</label>
+                      <input type="text" placeholder={(editingTournament?.passwordHash || editingTournament?.password) ? "Đã thiết lập (Nhập vào đây để đổi mật khẩu mới)" : "Nhập mật khẩu cho sự kiện..."} className="w-full bg-slate-50 border border-slate-200 rounded-[1.2rem] p-3.5 text-[15px] font-bold focus:border-slate-900 focus:outline-none" value={newTournamentPassword} onChange={(e) => setNewTournamentPassword(e.target.value)} />
+                    </div>
+                  )}
                 </div>
                 <div className="pt-4 flex gap-3">
                   {editingTournament && <button type="button" onClick={handleDeleteTournament} className="py-4 px-5 bg-rose-50 text-rose-600 rounded-2xl font-bold shadow-sm active:scale-95 transition-transform"><Trash2 size={20} /></button>}
@@ -1382,9 +1418,10 @@ export default function App() {
               <h2 className="text-[17px] font-black tracking-tight text-slate-900 text-center uppercase mb-1">Sự Kiện Riêng Tư</h2>
               <p className="text-center text-[12px] font-bold text-slate-500 mb-6 truncate px-2">{eventAuthModal.event?.name}</p>
               
-              <form onSubmit={(e) => {
+              <form onSubmit={async (e) => {
                 e.preventDefault();
-                if (eventAuthModal.password === eventAuthModal.event?.password) {
+                const inputHash = await hashString(eventAuthModal.password);
+                if (inputHash === eventAuthModal.event?.passwordHash || eventAuthModal.password === eventAuthModal.event?.password) {
                   setUnlockedEvents(prev => ({ ...prev, [eventAuthModal.event.id]: true }));
                   goToDetail(eventAuthModal.event.id);
                   setEventAuthModal({ isOpen: false, event: null, password: '', error: '' });
