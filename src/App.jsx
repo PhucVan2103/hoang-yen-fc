@@ -268,30 +268,6 @@ export default function App() {
     }
   }, []);
 
-  // Xử lý kết quả đăng nhập từ Google Redirect
-  useEffect(() => {
-    getRedirectResult(auth).then(async (result) => {
-      if (result && result.user && result.user.email) {
-        const email = result.user.email;
-        if (email === MASTER_ADMIN_EMAIL) {
-          setIsAdminView(true);
-          setShowLoginModal(false);
-        } else {
-          const adminDoc = await getDoc(doc(db, 'admins', email.toLowerCase()));
-          if (adminDoc.exists()) {
-            setIsAdminView(true);
-            setShowLoginModal(false);
-          } else {
-            alert(`Tài khoản "${email}" không có quyền quản trị viên!\nVui lòng sử dụng tài khoản đã được cấp phép.`);
-            await signOut(auth);
-          }
-        }
-      }
-    }).catch(err => {
-      console.error("Lỗi Redirect:", err);
-    });
-  }, []);
-
   // Đảm bảo tắt màn hình chờ an toàn không phụ thuộc vào tốc độ mạng
   useEffect(() => {
     const timer = setTimeout(() => {
@@ -514,11 +490,29 @@ export default function App() {
       const provider = new GoogleAuthProvider();
       // Ép hệ thống luôn hiển thị bảng chọn tài khoản Gmail
       provider.setCustomParameters({ prompt: 'select_account' });
-      // Chuyển sang dùng Redirect để tránh lỗi Popup trên điện thoại / Vercel
-      await signInWithRedirect(auth, provider);
+      const result = await signInWithPopup(auth, provider);
+      
+      if (result && result.user && result.user.email) {
+        const email = result.user.email.toLowerCase();
+        const isMaster = email === MASTER_ADMIN_EMAIL.toLowerCase();
+        
+        // Đọc trực tiếp từ Database để đảm bảo dữ liệu quyền lực nhất
+        const adminDoc = await getDoc(doc(db, 'admins', email));
+        
+        if (isMaster || adminDoc.exists() || adminEmails.includes(email)) {
+          setIsAdmin(true); // Kích hoạt ngay lập tức
+          setIsAdminView(true);
+          setShowLoginModal(false);
+        } else {
+          alert(`Tài khoản "${result.user.email}" không có quyền quản trị viên!\nVui lòng liên hệ Admin để được cấp quyền.`);
+          await signOut(auth);
+        }
+      }
     } catch (err) {
       console.error("Lỗi đăng nhập:", err);
-      alert(`Lỗi khởi tạo đăng nhập: ${err.message}`);
+      if (err.code !== 'auth/popup-closed-by-user' && err.code !== 'auth/cancelled-popup-request') {
+        alert(`Lỗi đăng nhập: ${err.message}`);
+      }
     }
   };
 
