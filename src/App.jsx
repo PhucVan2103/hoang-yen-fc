@@ -486,26 +486,11 @@ export default function App() {
       const provider = new GoogleAuthProvider();
       // Ép hệ thống luôn hiển thị bảng chọn tài khoản Gmail
       provider.setCustomParameters({ prompt: 'select_account' });
-      const result = await signInWithPopup(auth, provider);
-      
-      if (result.user.email === MASTER_ADMIN_EMAIL || adminEmails.includes(result.user.email)) {
-        setIsAdminView(true);
-        setShowLoginModal(false);
-      } else {
-        alert(`Tài khoản "${result.user.email}" không có quyền quản trị viên!\nVui lòng sử dụng tài khoản đã được cấp phép.`);
-        await signOut(auth); // Đăng xuất ngay nếu không có quyền
-      }
+      // Chuyển sang dùng Redirect để tránh lỗi Popup trên điện thoại / Vercel
+      await signInWithRedirect(auth, provider);
     } catch (err) {
       console.error("Lỗi đăng nhập:", err);
-      if (err.code === 'auth/popup-closed-by-user') {
-        console.log("Người dùng đã tự đóng cửa sổ đăng nhập.");
-      } else if (err.code === 'auth/cancelled-popup-request') {
-        alert("Yêu cầu đăng nhập bị hủy vì có một cửa sổ đăng nhập khác đang mở. Vui lòng kiểm tra lại hoặc tải lại trang.");
-      } else if (err.code === 'auth/unauthorized-domain') {
-        alert("Tên miền Vercel này chưa được cấp phép. Bạn cần vào Firebase Console -> Authentication -> Settings -> Authorized Domains để thêm tên miền vào.");
-      } else {
-        alert(`Lỗi bảo mật (${err.code}).\n\nNếu bạn đang mở link bằng Zalo/Messenger hoặc Tab Ẩn danh, vui lòng mở lại bằng Chrome/Safari bình thường để đăng nhập.`);
-      }
+      alert(`Lỗi khởi tạo đăng nhập: ${err.message}`);
     }
   };
 
