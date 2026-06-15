@@ -343,17 +343,16 @@ export default function App() {
   }, [isAdmin]);
 
   useEffect(() => {
-    if (!user) return;
     const unsubAdmins = onSnapshot(collection(db, 'admins'), (snap) => setAdminEmails(snap.docs.map(doc => doc.id)));
     const unsubTournaments = onSnapshot(collection(db, 'tournaments'), (snap) => {
       setTournaments(snap.docs.map(doc => ({ id: doc.id, ...doc.data() })).sort((a, b) => new Date(b.createdAt || 0) - new Date(a.createdAt || 0)));
     });
     return () => { unsubAdmins(); unsubTournaments(); };
-  }, [user]);
+  }, []);
 
   // CHỈ tải dữ liệu chi tiết khi người dùng truy cập vào một Sự kiện cụ thể
   useEffect(() => {
-    if (!user || !activeTournamentId) {
+    if (!activeTournamentId) {
       setTransactions([]); setDonations([]); setPhotos([]); setTeams([]);
       return;
     }
@@ -364,7 +363,7 @@ export default function App() {
     const unsubTeams = onSnapshot(query(collection(db, 'teams'), where('tournamentId', '==', activeTournamentId)), (snap) => setTeams(snap.docs.map(doc => ({ id: doc.id, ...doc.data() }))));
 
     return () => { unsubTrans(); unsubDonations(); unsubPhotos(); unsubTeams(); };
-  }, [user, activeTournamentId]);
+  }, [activeTournamentId]);
 
   const currentTransactions = useMemo(() => transactions, [transactions]);
   const currentDonations = useMemo(() => donations, [donations]);
