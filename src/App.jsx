@@ -208,6 +208,41 @@ export default function App() {
     }
   }, [user, adminEmails]);
 
+  // Tự động đăng xuất sau 30 phút không hoạt động
+  const logoutTimerRef = useRef(null);
+  useEffect(() => {
+    const autoLogoutTime = 30 * 60 * 1000; // 30 phút (tính bằng mili-giây)
+
+    const logoutAdmin = async () => {
+      if (auth.currentUser && !auth.currentUser.isAnonymous) {
+        await signOut(auth);
+        setIsAdminView(true);
+        alert("Hệ thống đã tự động đăng xuất để bảo mật do không có thao tác nào trong 30 phút.");
+      }
+    };
+
+    const resetTimer = () => {
+      if (logoutTimerRef.current) clearTimeout(logoutTimerRef.current);
+      if (isAdmin) {
+        logoutTimerRef.current = setTimeout(logoutAdmin, autoLogoutTime);
+      }
+    };
+
+    const handleActivity = () => resetTimer();
+    // Lắng nghe các thao tác cơ bản của người dùng
+    const events = ['mousemove', 'mousedown', 'keypress', 'scroll', 'touchstart'];
+
+    if (isAdmin) {
+      resetTimer();
+      events.forEach(e => window.addEventListener(e, handleActivity));
+    }
+
+    return () => {
+      if (logoutTimerRef.current) clearTimeout(logoutTimerRef.current);
+      events.forEach(e => window.removeEventListener(e, handleActivity));
+    };
+  }, [isAdmin]);
+
   useEffect(() => {
     if (!user) return;
     const unsubTrans = onSnapshot(collection(db, 'transactions'), (snap) => setTransactions(snap.docs.map(doc => ({ id: doc.id, ...doc.data() })).sort(sortNewestFirst)));
