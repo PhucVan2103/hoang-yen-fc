@@ -3,7 +3,10 @@ import { initializeApp } from 'firebase/app';
 import { 
   getAuth, 
   signInAnonymously, 
-  onAuthStateChanged 
+  onAuthStateChanged,
+  signInWithPopup,
+  GoogleAuthProvider,
+  signOut
 } from 'firebase/auth';
 import { 
   getFirestore, 
@@ -50,7 +53,8 @@ import {
   List,
   Crown,
   Medal,
-  BarChart3
+  BarChart3,
+  LogOut
 } from 'lucide-react';
 
 // --- Firebase Configuration (Cấu hình thật của Hoàng Yên FC) ---
@@ -72,6 +76,9 @@ const getLocalDateString = () => {
   return new Date(d.getTime() - d.getTimezoneOffset() * 60000).toISOString().split('T')[0];
 };
 
+// Danh sách các Gmail được phép làm Admin (Hãy thay bằng Gmail thật của ban quản trị)
+const ADMIN_EMAILS = ['admin@hoangyen.com', 'your.email@gmail.com'];
+
 export default function App() {
   const [user, setUser] = useState(null);
   const [isAdmin, setIsAdmin] = useState(false);
@@ -92,7 +99,6 @@ export default function App() {
   const [modalType, setModalType] = useState('fund'); 
   const [showTournamentModal, setShowTournamentModal] = useState(false); 
   const [showLoginModal, setShowLoginModal] = useState(false);
-  const [passwordInput, setPasswordInput] = useState('');
   const [editingTournament, setEditingTournament] = useState(null); 
   const [editingData, setEditingData] = useState(null); 
   const [selectedPhoto, setSelectedPhoto] = useState(null);
@@ -171,15 +177,20 @@ export default function App() {
   }, [currentScreen, activeTournament, isAdmin, unlockedEvents]);
 
   useEffect(() => {
-    const initAuth = async () => {
-      try {
-        await signInAnonymously(auth);
-      } catch (err) {
-        console.error("Lỗi đăng nhập:", err);
+    const unsubscribe = onAuthStateChanged(auth, (currentUser) => {
+      if (currentUser) {
+        setUser(currentUser);
+        // Chỉ cấp quyền Admin nếu Email đăng nhập nằm trong danh sách ADMIN_EMAILS
+        if (!currentUser.isAnonymous && currentUser.email && ADMIN_EMAILS.includes(currentUser.email)) {
+          setIsAdmin(true);
+        } else {
+          setIsAdmin(false);
+        }
+      } else {
+        signInAnonymously(auth).catch(console.error);
       }
-    };
-    initAuth();
-    return onAuthStateChanged(auth, setUser);
+    });
+    return unsubscribe;
   }, []);
 
   useEffect(() => {
@@ -288,17 +299,28 @@ export default function App() {
   const closeConfirm = () => setConfirmModal(prev => ({ ...prev, isOpen: false }));
 
   const handleShieldClick = () => {
-    if (!isAdmin) { setShowLoginModal(true); setPasswordInput(''); }
+    if (!isAdmin) { setShowLoginModal(true); }
     else {
       if (isAdminView) openConfirm("Chế độ người xem", "Bạn muốn chuyển sang chế độ người xem?", () => { setIsAdminView(false); closeConfirm(); }, 'primary');
       else openConfirm("Chế độ quản lý", "Bạn muốn quay lại chế độ quản lý?", () => { setIsAdminView(true); closeConfirm(); }, 'primary');
     }
   };
 
-  const handleLoginSubmit = (e) => {
-    e.preventDefault();
-    if (passwordInput === 'hoangyenfc@2026') { setIsAdmin(true); setIsAdminView(true); setShowLoginModal(false); setPasswordInput(''); }
-    else alert("Mật khẩu không chính xác!");
+  const handleGoogleLogin = async () => {
+    try {
+      const provider = new GoogleAuthProvider();
+      const result = await signInWithPopup(auth, provider);
+      
+      if (ADMIN_EMAILS.includes(result.user.email)) {
+        setIsAdminView(true);
+        setShowLoginModal(false);
+      } else {
+        alert("Tài khoản Gmail này không có quyền quản trị viên!");
+        await signOut(auth); // Đăng xuất ngay nếu không có quyền
+      }
+    } catch (err) {
+      console.error("Lỗi đăng nhập:", err);
+    }
   };
 
   const goToDetail = (id) => { 
@@ -577,6 +599,11 @@ export default function App() {
             {currentScreen === 'detail' && (
               <button onClick={handleShare} title="Chia sẻ sự kiện" className="w-10 h-10 rounded-full flex items-center justify-center transition-all shadow-sm bg-slate-100 text-slate-600 hover:bg-slate-200 active:scale-95">
                 <Share2 size={18} />
+              </button>
+            )}
+            {isAdmin && (
+              <button onClick={async () => { await signOut(auth); setIsAdminView(true); }} title="Đăng xuất hoàn toàn" className="w-10 h-10 rounded-full flex items-center justify-center transition-all shadow-sm bg-rose-100 text-rose-600 hover:bg-rose-200 active:scale-95">
+                <LogOut size={18} strokeWidth={2.5} />
               </button>
             )}
             <button 
@@ -1329,13 +1356,18 @@ export default function App() {
                 </div>
                 <button onClick={() => setShowLoginModal(false)} className="bg-slate-100 p-2 rounded-full text-slate-500 hover:bg-slate-200"><X size={18} strokeWidth={2.5} /></button>
               </div>
-              <form onSubmit={handleLoginSubmit} className="space-y-6">
-                <div className="space-y-2">
-                  <label className="text-[11px] font-black text-slate-400 ml-1 uppercase tracking-wider">Mật khẩu Quản trị</label>
-                  <input type="password" required autoFocus placeholder="Nhập mật khẩu..." className="w-full bg-slate-50 border border-slate-200 rounded-2xl p-4 text-[15px] font-black focus:border-slate-900 focus:outline-none tracking-widest text-center" value={passwordInput} onChange={(e) => setPasswordInput(e.target.value)} />
-                </div>
-                <button type="submit" className="w-full py-4 bg-emerald-500 text-white rounded-2xl font-black shadow-lg active:scale-[0.98] transition-transform tracking-widest uppercase">Đăng Nhập</button>
-              </form>
+          <div className="space-y-6">
+            <p className="text-[13px] font-medium text-slate-500 text-center leading-relaxed">Đăng nhập bằng tài khoản Google (Gmail) được cấp quyền để truy cập trang quản trị.</p>
+            <button onClick={handleGoogleLogin} className="w-full py-4 bg-slate-100 text-slate-700 hover:bg-slate-200 rounded-2xl font-black shadow-sm active:scale-[0.98] transition-transform tracking-widest uppercase flex items-center justify-center gap-3 border border-slate-200">
+              <svg className="w-5 h-5" viewBox="0 0 24 24">
+                <path d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z" fill="#4285F4"/>
+                <path d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" fill="#34A853"/>
+                <path d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z" fill="#FBBC05"/>
+                <path d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z" fill="#EA4335"/>
+              </svg>
+              Đăng Nhập với Google
+            </button>
+          </div>
             </div>
           </div>
         )}
